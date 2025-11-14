@@ -195,51 +195,47 @@ export const completeRecurrenceSeries = async (
 };
 
 export const createReminder = async (
-  todoId: string,
-  payload: ReminderPayload
+  payload: ReminderPayload & { todoId: string }
 ): Promise<Reminder> => {
   const response = await apiClient.post<{ data: Reminder }>(
-    `/todos/${todoId}/reminders`,
+    '/reminders',
     payload
   );
   return response.data.data;
 };
 
 export const updateReminderRequest = async (
-  todoId: string,
   reminderId: string,
   payload: Partial<ReminderPayload>
 ): Promise<Reminder> => {
   const response = await apiClient.patch<{ data: Reminder }>(
-    `/todos/${todoId}/reminders/${reminderId}`,
+    `/reminders/${reminderId}`,
     payload
   );
   return response.data.data;
 };
 
 export const deleteReminder = async (
-  todoId: string,
   reminderId: string
 ): Promise<void> => {
-  await apiClient.delete(`/todos/${todoId}/reminders/${reminderId}`);
+  await apiClient.delete(`/reminders/${reminderId}`);
 };
 
 export const fetchActivityLog = async (
-  todoId: string,
   query: ActivityLogQuery = {}
-): Promise<ActivityLog[]> => {
-  const response = await apiClient.get<{ data: ActivityLog[] }>(
-    `/todos/${todoId}/activity`,
+): Promise<PaginatedResponse<ActivityLog[]>> => {
+  const response = await apiClient.get<PaginatedResponse<ActivityLog[]>>(
+    '/activity-logs',
     {
       params: query,
     }
   );
-  return response.data.data;
+  return response.data;
 };
 
 export const fetchSavedFilters = async (): Promise<SavedFilter[]> => {
   const response = await apiClient.get<{ data: SavedFilter[] }>(
-    '/preferences/filters'
+    '/saved-filters'
   );
   return response.data.data;
 };
@@ -248,19 +244,19 @@ export const saveFilter = async (
   payload: SavedFilterPayload
 ): Promise<SavedFilter> => {
   const response = await apiClient.post<{ data: SavedFilter }>(
-    '/preferences/filters',
+    '/saved-filters',
     payload
   );
   return response.data.data;
 };
 
 export const deleteFilter = async (filterId: string): Promise<void> => {
-  await apiClient.delete(`/preferences/filters/${filterId}`);
+  await apiClient.delete(`/saved-filters/${filterId}`);
 };
 
 export const fetchUserPreferences = async (): Promise<UserPreferences> => {
   const response = await apiClient.get<{ data: UserPreferences }>(
-    '/preferences/me'
+    '/user-preferences'
   );
   return response.data.data;
 };
@@ -269,7 +265,7 @@ export const updateUserPreferences = async (
   payload: PreferencesPayload
 ): Promise<UserPreferences> => {
   const response = await apiClient.patch<{ data: UserPreferences }>(
-    '/preferences/me',
+    '/user-preferences',
     payload
   );
   return response.data.data;
@@ -279,7 +275,7 @@ export const fetchAnalyticsSummary = async (
   query: TodoListQuery = {}
 ): Promise<AnalyticsSummary> => {
   const response = await apiClient.get<{ data: AnalyticsSummary }>(
-    '/analytics/overview',
+    '/analytics/summary',
     {
       params: query,
     }
@@ -288,15 +284,19 @@ export const fetchAnalyticsSummary = async (
 };
 
 export const searchTodos = async (
-  term: string
-): Promise<SearchResult[]> => {
-  const response = await apiClient.get<{ data: SearchResult[] }>(
-    '/todos/search',
+  term: string,
+  filters?: any
+): Promise<PaginatedResponse<SearchResult[]>> => {
+  const response = await apiClient.get<PaginatedResponse<SearchResult[]>>(
+    '/search/todos',
     {
-      params: { q: term },
+      params: { 
+        q: term,
+        ...(filters && { filters })
+      },
     }
   );
-  return response.data.data;
+  return response.data;
 };
 
 export const bulkUpdateTodos = async (
@@ -318,5 +318,29 @@ export const fetchCategories = async (): Promise<Category[]> => {
 
 export const fetchTags = async (): Promise<Tag[]> => {
   const response = await apiClient.get<{ data: Tag[] }>('/tags');
+  return response.data.data;
+};
+
+export const getRemindersByTodo = async (todoId: string): Promise<Reminder[]> => {
+  const response = await apiClient.get<{ data: Reminder[] }>(
+    `/reminders/todo/${todoId}`
+  );
+  return response.data.data;
+};
+
+export const getUpcomingReminders = async (hours?: number): Promise<Reminder[]> => {
+  const response = await apiClient.get<{ data: Reminder[] }>(
+    '/reminders/upcoming',
+    {
+      params: hours ? { hours } : {},
+    }
+  );
+  return response.data.data;
+};
+
+export const getReminder = async (reminderId: string): Promise<Reminder> => {
+  const response = await apiClient.get<{ data: Reminder }>(
+    `/reminders/${reminderId}`
+  );
   return response.data.data;
 };

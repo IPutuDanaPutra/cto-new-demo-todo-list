@@ -6,6 +6,7 @@ import {
   Cog6ToothIcon,
   FolderIcon,
   TagIcon,
+  ClockIcon,
 } from '@heroicons/react/24/outline';
 import { cn } from '@/utils/cn';
 
@@ -21,6 +22,7 @@ const navigation: NavItem[] = [
   { name: 'Categories', href: '/categories', icon: FolderIcon },
   { name: 'Tags', href: '/tags', icon: TagIcon },
   { name: 'Calendar', href: '/calendar', icon: CalendarIcon },
+  { name: 'Activity', href: '/activity', icon: ClockIcon },
   { name: 'Settings', href: '/settings', icon: Cog6ToothIcon },
 ];
 

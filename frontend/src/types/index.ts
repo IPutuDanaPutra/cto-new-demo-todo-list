@@ -157,6 +157,13 @@ export interface SearchResult {
   matchedFields: string[];
   dueDate: string | null;
   priority: TodoPriority;
+  status: TodoStatus;
+  category?: {
+    id: string;
+    name: string;
+    color: string;
+  } | null;
+  _relevanceScore?: number;
 }
 
 export interface UserPreferences {
