@@ -1,6 +1,44 @@
 import { Todo, Prisma, TodoStatus, TodoPriority } from '@prisma/client';
 import { getPrismaClient } from '../config';
 
+const todoDetailsInclude = Prisma.validator<Prisma.TodoInclude>()({
+  tags: { include: { tag: true } },
+  subtasks: true,
+  attachments: true,
+  reminders: true,
+  recurrenceRule: true,
+  category: true,
+});
+
+export type TodoWithRelations = Prisma.TodoGetPayload<{
+  include: typeof todoDetailsInclude;
+}>;
+
+const todoListInclude = Prisma.validator<Prisma.TodoInclude>()({
+  tags: { include: { tag: true } },
+  category: true,
+  subtasks: true,
+  attachments: true,
+});
+
+export type TodoListItem = Prisma.TodoGetPayload<{
+  include: typeof todoListInclude;
+}>;
+
+export type TodoPaginationOptions = {
+  skip?: number;
+  take?: number;
+  status?: TodoStatus;
+  categoryId?: string;
+  priority?: TodoPriority;
+  tagId?: string;
+  dueDateFrom?: Date;
+  dueDateTo?: Date;
+  search?: string;
+  sortBy?: 'createdAt' | 'dueDate' | 'priority' | 'title';
+  sortOrder?: 'asc' | 'desc';
+};
+
 export class TodoRepository {
   private prisma = getPrismaClient();
 
@@ -8,19 +46,23 @@ export class TodoRepository {
     return this.prisma.todo.create({ data });
   }
 
-  async findById(id: string, includeRelations = false): Promise<Todo | null> {
+  async findById(id: string): Promise<Todo | null>;
+  async findById(id: string, includeRelations: false): Promise<Todo | null>;
+  async findById(
+    id: string,
+    includeRelations: true
+  ): Promise<TodoWithRelations | null>;
+  async findById(
+    id: string,
+    includeRelations = false
+  ): Promise<Todo | TodoWithRelations | null> {
     if (includeRelations) {
       return this.prisma.todo.findUnique({
         where: { id },
-        include: {
-          tags: { include: { tag: true } },
-          subtasks: true,
-          attachments: true,
-          reminders: true,
-          recurrenceRule: true,
-        },
+        include: todoDetailsInclude,
       });
     }
+
     return this.prisma.todo.findUnique({ where: { id } });
   }
 
@@ -120,65 +162,70 @@ export class TodoRepository {
 
   async findByUserIdWithPagination(
     userId: string,
-    options?: {
-      skip?: number;
-      take?: number;
-      status?: TodoStatus;
-      categoryId?: string;
-      priority?: TodoPriority;
-      tagId?: string;
-      dueDateFrom?: Date;
-      dueDateTo?: Date;
-      search?: string;
-      sortBy?: 'createdAt' | 'dueDate' | 'priority' | 'title';
-      sortOrder?: 'asc' | 'desc';
-    }
-  ): Promise<{ data: Todo[]; total: number }> {
+    options: TodoPaginationOptions = {}
+  ): Promise<{ data: TodoListItem[]; total: number }> {
+    const {
+      skip,
+      take,
+      status,
+      categoryId,
+      priority,
+      tagId,
+      dueDateFrom,
+      dueDateTo,
+      search,
+      sortBy = 'createdAt',
+      sortOrder = 'desc',
+    } = options;
+
     const where: Prisma.TodoWhereInput = {
       userId,
-      ...(options?.status && { status: options.status }),
-      ...(options?.categoryId && { categoryId: options.categoryId }),
-      ...(options?.priority && { priority: options.priority }),
-      ...(options?.tagId && {
+      ...(status && { status }),
+      ...(categoryId && { categoryId }),
+      ...(priority && { priority }),
+      ...(tagId && {
         tags: {
           some: {
-            tagId: options.tagId,
+            tagId,
           },
         },
       }),
-      ...((options?.dueDateFrom || options?.dueDateTo) && {
+      ...((dueDateFrom || dueDateTo) && {
         dueDate: {
-          ...(options?.dueDateFrom && { gte: options.dueDateFrom }),
-          ...(options?.dueDateTo && { lte: options.dueDateTo }),
+          ...(dueDateFrom && { gte: dueDateFrom }),
+          ...(dueDateTo && { lte: dueDateTo }),
         },
       }),
-      ...(options?.search && {
+      ...(search && {
         OR: [
-          { title: { contains: options.search, mode: 'insensitive' } },
-          { description: { contains: options.search, mode: 'insensitive' } },
+          { title: { contains: search, mode: 'insensitive' } },
+          { description: { contains: search, mode: 'insensitive' } },
         ],
       }),
     };
 
-    const sortByMap: Record<string, Prisma.TodoOrderByWithRelationInput> = {
-      createdAt: { createdAt: options?.sortOrder || 'desc' },
-      dueDate: { dueDate: options?.sortOrder || 'desc' },
-      priority: { priority: options?.sortOrder || 'desc' },
-      title: { title: options?.sortOrder || 'desc' },
-    };
+    let orderBy: Prisma.TodoOrderByWithRelationInput;
+    switch (sortBy) {
+      case 'dueDate':
+        orderBy = { dueDate: sortOrder };
+        break;
+      case 'priority':
+        orderBy = { priority: sortOrder };
+        break;
+      case 'title':
+        orderBy = { title: sortOrder };
+        break;
+      default:
+        orderBy = { createdAt: sortOrder };
+    }
 
     const [data, total] = await Promise.all([
       this.prisma.todo.findMany({
         where,
-        include: {
-          tags: { include: { tag: true } },
-          category: true,
-          subtasks: true,
-          attachments: true,
-        },
-        skip: options?.skip,
-        take: options?.take,
-        orderBy: sortByMap[options?.sortBy || 'createdAt'],
+        include: todoListInclude,
+        skip,
+        take,
+        orderBy,
       }),
       this.prisma.todo.count({ where }),
     ]);
@@ -200,50 +247,53 @@ export class TodoRepository {
     id: string,
     includeSubtasks = true,
     includeTags = true
-  ): Promise<Todo> {
+  ): Promise<TodoWithRelations> {
     const original = await this.findById(id, true);
 
     if (!original) {
       throw new Error('Todo not found');
     }
 
+    const createData: Prisma.TodoCreateInput = {
+      user: { connect: { id: original.userId } },
+      ...(original.categoryId && {
+        category: { connect: { id: original.categoryId } },
+      }),
+      title: `${original.title} (copy)`,
+      description: original.description,
+      status: original.status,
+      priority: original.priority,
+      startDate: original.startDate ?? undefined,
+      dueDate: original.dueDate ?? undefined,
+      reminderLeadTime: original.reminderLeadTime ?? undefined,
+      ...(original.recurrenceRuleId && {
+        recurrenceRule: { connect: { id: original.recurrenceRuleId } },
+      }),
+      ...(includeTags && original.tags.length > 0 && {
+        tags: {
+          createMany: {
+            data: original.tags.map(({ tagId }) => ({ tagId })),
+            skipDuplicates: true,
+          },
+        },
+      }),
+      ...(includeSubtasks && original.subtasks.length > 0 && {
+        subtasks: {
+          create: original.subtasks.map(
+            ({ userId: subtaskUserId, title, completed, ordering }) => ({
+              user: { connect: { id: subtaskUserId } },
+              title,
+              completed,
+              ordering,
+            })
+          ),
+        },
+      }),
+    };
+
     const newTodo = await this.prisma.todo.create({
-      data: {
-        userId: original.userId,
-        categoryId: original.categoryId,
-        title: `${original.title} (copy)`,
-        description: original.description,
-        status: original.status,
-        priority: original.priority,
-        startDate: original.startDate,
-        dueDate: original.dueDate,
-        reminderLeadTime: original.reminderLeadTime,
-        recurrenceRuleId: original.recurrenceRuleId,
-        ...(includeTags &&
-          original.tags.length > 0 && {
-            tags: {
-              create: original.tags.map((t: any) => ({
-                tagId: t.tag.id,
-              })),
-            },
-          }),
-        ...(includeSubtasks &&
-          original.subtasks.length > 0 && {
-            subtasks: {
-              create: original.subtasks.map((s: any) => ({
-                userId: s.userId,
-                title: s.title,
-                completed: s.completed,
-                ordering: s.ordering,
-              })),
-            },
-          }),
-      },
-      include: {
-        tags: { include: { tag: true } },
-        subtasks: true,
-        attachments: true,
-      },
+      data: createData,
+      include: todoDetailsInclude,
     });
 
     return newTodo;

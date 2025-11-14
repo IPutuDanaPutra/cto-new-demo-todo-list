@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import {
   TodoRepository,
   TagRepository,
@@ -80,15 +81,15 @@ export class TodoService {
       await this.todoRepository.findByUserIdWithPagination(userId, {
         skip,
         take: query.limit,
-        ...(query.status && { status: query.status }),
-        ...(query.categoryId && { categoryId: query.categoryId }),
-        ...(query.priority && { priority: query.priority }),
-        ...(query.tagId && { tagId: query.tagId }),
-        ...(query.dueDateFrom && { dueDateFrom: query.dueDateFrom }),
-        ...(query.dueDateTo && { dueDateTo: query.dueDateTo }),
-        ...(query.search && { search: query.search }),
-        sortBy: query.sortBy as any,
-        sortOrder: query.sortOrder as any,
+        status: query.status,
+        categoryId: query.categoryId,
+        priority: query.priority,
+        tagId: query.tagId,
+        dueDateFrom: query.dueDateFrom,
+        dueDateTo: query.dueDateTo,
+        search: query.search,
+        sortBy: query.sortBy,
+        sortOrder: query.sortOrder,
       });
 
     return {
@@ -124,7 +125,7 @@ export class TodoService {
     }
 
     // Build update data, filtering out undefined values
-    const updateData: any = {};
+    const updateData: Prisma.TodoUpdateInput = {};
     if (data.title !== undefined) updateData.title = data.title;
     if (data.description !== undefined)
       updateData.description = data.description;
