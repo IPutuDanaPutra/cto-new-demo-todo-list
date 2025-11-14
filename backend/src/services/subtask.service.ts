@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { SubtaskRepository, TodoRepository } from '../repositories';
 import { ApiError } from '../utils';
 import {
@@ -91,10 +92,16 @@ export class SubtaskService {
     }
 
     // Build update data, filtering out undefined values
-    const updateData: any = {};
-    if (data.title !== undefined) updateData.title = data.title;
-    if (data.completed !== undefined) updateData.completed = data.completed;
-    if (data.ordering !== undefined) updateData.ordering = data.ordering;
+    const updateData: Prisma.SubtaskUpdateInput = {};
+    if (data.title !== undefined) {
+      updateData.title = data.title;
+    }
+    if (data.completed !== undefined) {
+      updateData.completed = data.completed;
+    }
+    if (data.ordering !== undefined) {
+      updateData.ordering = data.ordering;
+    }
 
     const updated = await this.subtaskRepository.update(subtaskId, updateData);
     return updated;

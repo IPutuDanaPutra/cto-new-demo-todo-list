@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { CategoryRepository } from '../repositories';
 import { ApiError } from '../utils';
 import {
@@ -82,10 +83,16 @@ export class CategoryService {
     }
 
     // Build update data, filtering out undefined values
-    const updateData: any = {};
-    if (data.name !== undefined) updateData.name = data.name;
-    if (data.color !== undefined) updateData.color = data.color;
-    if (data.ordering !== undefined) updateData.ordering = data.ordering;
+    const updateData: Prisma.CategoryUpdateInput = {};
+    if (data.name !== undefined) {
+      updateData.name = data.name;
+    }
+    if (data.color !== undefined) {
+      updateData.color = data.color;
+    }
+    if (data.ordering !== undefined) {
+      updateData.ordering = data.ordering;
+    }
 
     const updated = await this.categoryRepository.update(
       categoryId,

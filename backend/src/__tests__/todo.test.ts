@@ -404,8 +404,18 @@ describe('Todo Endpoints', () => {
         include: { tags: true },
       });
 
-      expect((todo as any)?.tags.length).toBe(1);
-      expect((todo as any)?.tags[0].tagId).toBe(tagId);
+      expect(todo).not.toBeNull();
+      if (!todo) {
+        throw new Error('Todo should exist after adding a tag');
+      }
+
+      expect(todo.tags).toHaveLength(1);
+      const tag = todo.tags[0];
+      expect(tag).toBeDefined();
+      if (!tag) {
+        throw new Error('Tag should exist on the todo');
+      }
+      expect(tag.tagId).toBe(tagId);
     });
   });
 

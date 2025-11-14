@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { TagRepository } from '../repositories';
 import { ApiError } from '../utils';
 import { CreateTagInput, UpdateTagInput } from '../schemas';
@@ -65,9 +66,13 @@ export class TagService {
     }
 
     // Build update data, filtering out undefined values
-    const updateData: any = {};
-    if (data.name !== undefined) updateData.name = data.name;
-    if (data.color !== undefined) updateData.color = data.color;
+    const updateData: Prisma.TagUpdateInput = {};
+    if (data.name !== undefined) {
+      updateData.name = data.name;
+    }
+    if (data.color !== undefined) {
+      updateData.color = data.color;
+    }
 
     const updated = await this.tagRepository.update(tagId, updateData);
     return updated;
