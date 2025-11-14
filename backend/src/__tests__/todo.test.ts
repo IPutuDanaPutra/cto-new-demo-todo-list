@@ -404,8 +404,8 @@ describe('Todo Endpoints', () => {
         include: { tags: true },
       });
 
-      expect(todo?.tags.length).toBe(1);
-      expect(todo?.tags[0].tagId).toBe(tagId);
+      expect((todo as any)?.tags.length).toBe(1);
+      expect((todo as any)?.tags[0].tagId).toBe(tagId);
     });
   });
 

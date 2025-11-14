@@ -235,9 +235,133 @@ describe('Category Endpoints', () => {
 
       expect(response.body.data.length).toBe(2);
       const reordered = response.body.data.find(
-        (c: any) => c.id === categories[0].id
+        (c: { id: string; ordering: number }) => c.id === categories[0].id
       );
       expect(reordered.ordering).toBe(1);
+    });
+
+    it('should fail to reorder with unauthorized category', async () => {
+      // Create a category for another user
+      const otherUser = await createTestUser('other@example.com', 'Other User');
+      const otherCategory = await prisma.category.create({
+        data: {
+          userId: otherUser.id,
+          name: 'Other Category',
+          ordering: 0,
+        },
+      });
+
+      const categories = await prisma.category.findMany({
+        where: { userId },
+      });
+
+      await request(app)
+        .post('/categories/reorder')
+        .set('X-User-ID', userId)
+        .send({
+          ordering: [
+            { id: categories[0].id, ordering: 1 },
+            { id: otherCategory.id, ordering: 0 }, // Unauthorized category
+          ],
+        })
+        .expect(403);
+    });
+  });
+
+  describe('Edge Cases', () => {
+    it('should create category with default color when not provided', async () => {
+      const response = await request(app)
+        .post('/categories')
+        .set('X-User-ID', userId)
+        .send({
+          name: 'Default Color Category',
+        })
+        .expect(201);
+
+      expect(response.body.data.color).toBe('#3b82f6');
+    });
+
+    it('should create category with first ordering when no categories exist', async () => {
+      const response = await request(app)
+        .post('/categories')
+        .set('X-User-ID', userId)
+        .send({
+          name: 'First Category',
+        })
+        .expect(201);
+
+      expect(response.body.data.ordering).toBe(0);
+    });
+
+    it('should update only provided fields', async () => {
+      const category = await prisma.category.create({
+        data: {
+          userId,
+          name: 'Original Name',
+          color: '#ff0000',
+          ordering: 0,
+        },
+      });
+
+      const response = await request(app)
+        .patch(`/categories/${category.id}`)
+        .set('X-User-ID', userId)
+        .send({
+          name: 'Updated Name',
+        })
+        .expect(200);
+
+      expect(response.body.data.name).toBe('Updated Name');
+      expect(response.body.data.color).toBe('#ff0000'); // Should remain unchanged
+    });
+
+    it('should handle category not found in get operation', async () => {
+      await request(app)
+        .get('/categories/non-existent-id')
+        .set('X-User-ID', userId)
+        .expect(404);
+    });
+
+    it('should handle category not found in update operation', async () => {
+      await request(app)
+        .patch('/categories/non-existent-id')
+        .set('X-User-ID', userId)
+        .send({ name: 'Updated' })
+        .expect(404);
+    });
+
+    it('should handle category not found in delete operation', async () => {
+      await request(app)
+        .delete('/categories/non-existent-id')
+        .set('X-User-ID', userId)
+        .expect(404);
+    });
+
+    it('should prevent access to another user category', async () => {
+      const otherUser = await createTestUser('other@example.com', 'Other User');
+      const otherCategory = await prisma.category.create({
+        data: {
+          userId: otherUser.id,
+          name: 'Other Category',
+          ordering: 0,
+        },
+      });
+
+      await request(app)
+        .get(`/categories/${otherCategory.id}`)
+        .set('X-User-ID', userId)
+        .expect(403);
+
+      await request(app)
+        .patch(`/categories/${otherCategory.id}`)
+        .set('X-User-ID', userId)
+        .send({ name: 'Hacked' })
+        .expect(403);
+
+      await request(app)
+        .delete(`/categories/${otherCategory.id}`)
+        .set('X-User-ID', userId)
+        .expect(403);
     });
   });
 });

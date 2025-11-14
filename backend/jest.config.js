@@ -14,4 +14,7 @@ module.exports = {
   coverageReporters: ['text', 'lcov', 'html'],
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
   verbose: true,
+  setupFiles: ['<rootDir>/src/__tests__/jest.setup.js'],
+  testTimeout: 30000,
+  maxWorkers: 1, // Run tests in sequence to avoid database conflicts
 };
