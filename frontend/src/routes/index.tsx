@@ -7,6 +7,7 @@ import {
   TagsPage,
   CalendarPage,
   SettingsPage,
+  ActivityLogPage,
   NotFoundPage,
 } from '@/pages';
 
@@ -38,6 +39,10 @@ const router = createBrowserRouter([
       {
         path: 'settings',
         element: <SettingsPage />,
+      },
+      {
+        path: 'activity',
+        element: <ActivityLogPage />,
       },
       {
         path: '*',

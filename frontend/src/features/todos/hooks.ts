@@ -395,3 +395,27 @@ export const usePreferenceMutation = () => {
     },
   });
 };
+
+export const useUserPreferencesMutations = () => {
+  const queryClient = useQueryClient();
+
+  const updatePreferences = useMutation(updateUserPreferences, {
+    onSuccess: () => {
+      toast.success('Preferences updated');
+      void queryClient.invalidateQueries({ queryKey: todoKeys.preferences() });
+    },
+    onError: (error: Error) => {
+      toast.error(error.message);
+    },
+  });
+
+  return { updatePreferences };
+};
+
+export const useSearchTodos = () => {
+  return useMutation(searchTodos, {
+    onError: (error: Error) => {
+      toast.error('Search failed: ' + error.message);
+    },
+  });
+};
