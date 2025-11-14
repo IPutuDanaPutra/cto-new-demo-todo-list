@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { getPrismaClient } from '../config';
 import { ApiError } from '../utils';
 import { CreateAttachmentInput, UpdateAttachmentInput } from '../schemas';
@@ -94,9 +95,13 @@ export class AttachmentService {
     }
 
     // Build update data, filtering out undefined values
-    const updateData: any = {};
-    if (data.fileName !== undefined) updateData.fileName = data.fileName;
-    if (data.url !== undefined) updateData.url = data.url;
+    const updateData: Prisma.AttachmentUpdateInput = {};
+    if (data.fileName !== undefined) {
+      updateData.fileName = data.fileName;
+    }
+    if (data.url !== undefined) {
+      updateData.url = data.url;
+    }
 
     const updated = await this.prisma.attachment.update({
       where: { id: attachmentId },
