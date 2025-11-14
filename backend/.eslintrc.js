@@ -4,6 +4,7 @@ module.exports = {
     browser: false,
     es2022: true,
     node: true,
+    jest: true,
   },
   extends: ['eslint:recommended'],
   parser: '@typescript-eslint/parser',
@@ -17,6 +18,7 @@ module.exports = {
     '@typescript-eslint/no-explicit-any': 'warn',
     'no-console': 'warn',
     'no-debugger': 'error',
+    'no-unused-vars': 'off',
   },
   ignorePatterns: [
     'dist/',
