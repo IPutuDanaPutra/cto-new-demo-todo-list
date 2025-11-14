@@ -22,7 +22,13 @@ export class UserService {
       throw ApiError.notFound('User not found');
     }
 
-    const updated = await this.userRepository.update(userId, data);
+    const updateData: Record<string, any> = {};
+    if (data.displayName !== undefined)
+      updateData['displayName'] = data.displayName;
+    if (data.timezone !== undefined) updateData['timezone'] = data.timezone;
+    if (data.settings !== undefined) updateData['settings'] = data.settings;
+
+    const updated = await this.userRepository.update(userId, updateData as any);
     return updated;
   }
 

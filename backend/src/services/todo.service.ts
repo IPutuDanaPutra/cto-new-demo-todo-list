@@ -38,15 +38,17 @@ export class TodoService {
         ...(data.categoryId && {
           category: { connect: { id: data.categoryId } },
         }),
-        startDate: data.startDate,
-        dueDate: data.dueDate,
-        reminderLeadTime: data.reminderLeadTime,
-        tags:
-          data.tagIds && data.tagIds.length > 0
-            ? {
-                create: data.tagIds.map((tagId) => ({ tagId })),
-              }
-            : undefined,
+        ...(data.startDate !== undefined && { startDate: data.startDate }),
+        ...(data.dueDate !== undefined && { dueDate: data.dueDate }),
+        ...(data.reminderLeadTime !== undefined && {
+          reminderLeadTime: data.reminderLeadTime,
+        }),
+        ...(data.tagIds &&
+          data.tagIds.length > 0 && {
+            tags: {
+              create: data.tagIds.map((tagId) => ({ tagId })),
+            },
+          }),
       },
       include: {
         tags: { include: { tag: true } },
@@ -81,15 +83,15 @@ export class TodoService {
       await this.todoRepository.findByUserIdWithPagination(userId, {
         skip,
         take: query.limit,
-        status: query.status,
-        categoryId: query.categoryId,
-        priority: query.priority,
-        tagId: query.tagId,
-        dueDateFrom: query.dueDateFrom,
-        dueDateTo: query.dueDateTo,
-        search: query.search,
-        sortBy: query.sortBy,
-        sortOrder: query.sortOrder,
+        ...(query.status && { status: query.status }),
+        ...(query.categoryId && { categoryId: query.categoryId }),
+        ...(query.priority && { priority: query.priority }),
+        ...(query.tagId && { tagId: query.tagId }),
+        ...(query.dueDateFrom && { dueDateFrom: query.dueDateFrom }),
+        ...(query.dueDateTo && { dueDateTo: query.dueDateTo }),
+        ...(query.search && { search: query.search }),
+        ...(query.sortBy && { sortBy: query.sortBy }),
+        ...(query.sortOrder && { sortOrder: query.sortOrder }),
       });
 
     return {

@@ -223,8 +223,8 @@ export class TodoRepository {
       this.prisma.todo.findMany({
         where,
         include: todoListInclude,
-        skip,
-        take,
+        ...(skip !== undefined && { skip }),
+        ...(take !== undefined && { take }),
         orderBy,
       }),
       this.prisma.todo.count({ where }),
@@ -263,32 +263,36 @@ export class TodoRepository {
       description: original.description,
       status: original.status,
       priority: original.priority,
-      startDate: original.startDate ?? undefined,
-      dueDate: original.dueDate ?? undefined,
-      reminderLeadTime: original.reminderLeadTime ?? undefined,
+      ...(original.startDate && { startDate: original.startDate }),
+      ...(original.dueDate && { dueDate: original.dueDate }),
+      ...(original.reminderLeadTime && {
+        reminderLeadTime: original.reminderLeadTime,
+      }),
       ...(original.recurrenceRuleId && {
         recurrenceRule: { connect: { id: original.recurrenceRuleId } },
       }),
-      ...(includeTags && original.tags.length > 0 && {
-        tags: {
-          createMany: {
-            data: original.tags.map(({ tagId }) => ({ tagId })),
-            skipDuplicates: true,
+      ...(includeTags &&
+        original.tags.length > 0 && {
+          tags: {
+            createMany: {
+              data: original.tags.map(({ tagId }) => ({ tagId })),
+              skipDuplicates: true,
+            },
           },
-        },
-      }),
-      ...(includeSubtasks && original.subtasks.length > 0 && {
-        subtasks: {
-          create: original.subtasks.map(
-            ({ userId: subtaskUserId, title, completed, ordering }) => ({
-              user: { connect: { id: subtaskUserId } },
-              title,
-              completed,
-              ordering,
-            })
-          ),
-        },
-      }),
+        }),
+      ...(includeSubtasks &&
+        original.subtasks.length > 0 && {
+          subtasks: {
+            create: original.subtasks.map(
+              ({ userId: subtaskUserId, title, completed, ordering }) => ({
+                user: { connect: { id: subtaskUserId } },
+                title,
+                completed,
+                ordering,
+              })
+            ),
+          },
+        }),
     };
 
     const newTodo = await this.prisma.todo.create({

@@ -19,6 +19,7 @@ module.exports = {
     'no-console': 'warn',
     'no-debugger': 'error',
     'no-unused-vars': 'off',
+    'no-dupe-class-members': 'off',
   },
   ignorePatterns: [
     'dist/',

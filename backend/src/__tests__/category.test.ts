@@ -227,15 +227,15 @@ describe('Category Endpoints', () => {
         .set('X-User-ID', userId)
         .send({
           ordering: [
-            { id: categories[0].id, ordering: 1 },
-            { id: categories[1].id, ordering: 0 },
+            { id: categories[0]!.id, ordering: 1 },
+            { id: categories[1]!.id, ordering: 0 },
           ],
         })
         .expect(200);
 
       expect(response.body.data.length).toBe(2);
       const reordered = response.body.data.find(
-        (c: { id: string; ordering: number }) => c.id === categories[0].id
+        (c: { id: string; ordering: number }) => c.id === categories[0]!.id
       );
       expect(reordered.ordering).toBe(1);
     });
@@ -260,7 +260,7 @@ describe('Category Endpoints', () => {
         .set('X-User-ID', userId)
         .send({
           ordering: [
-            { id: categories[0].id, ordering: 1 },
+            { id: categories[0]!.id, ordering: 1 },
             { id: otherCategory.id, ordering: 0 }, // Unauthorized category
           ],
         })

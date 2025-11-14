@@ -248,15 +248,15 @@ describe('Subtask Endpoints', () => {
         .set('X-User-ID', userId)
         .send({
           ordering: [
-            { id: subtasks[0].id, ordering: 1 },
-            { id: subtasks[1].id, ordering: 0 },
+            { id: subtasks[0]!.id, ordering: 1 },
+            { id: subtasks[1]!.id, ordering: 0 },
           ],
         })
         .expect(200);
 
       expect(response.body.data.length).toBe(2);
       const reordered = response.body.data.find(
-        (s: { id: string; ordering: number }) => s.id === subtasks[0].id
+        (s: { id: string; ordering: number }) => s.id === subtasks[0]!.id
       );
       expect(reordered.ordering).toBe(1);
     });
