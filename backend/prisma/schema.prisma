@@ -1,0 +1,287 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User model for authentication and personal settings
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  displayName String
+  timezone  String   @default("UTC")
+  settings  Json     @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  categories    Category[]
+  tags          Tag[]
+  todos         Todo[]
+  subtasks      Subtask[]
+  attachments   Attachment[]
+  reminders     Reminder[]
+  viewPreferences ViewPreference[]
+  activityLogs  ActivityLog[]
+
+  @@map("users")
+}
+
+// Category model for organizing todos
+model Category {
+  id        String   @id @default(cuid())
+  userId    String
+  name      String
+  color     String   @default("#3b82f6")
+  ordering  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  todos     Todo[]
+
+  @@unique([userId, name])
+  @@index([userId])
+  @@map("categories")
+}
+
+// Tag model for flexible labeling
+model Tag {
+  id    String @id @default(cuid())
+  userId String
+  name  String
+  color String @default("#10b981")
+
+  // Relations
+  user User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  todos TodoTag[]
+
+  @@unique([userId, name])
+  @@index([userId])
+  @@map("tags")
+}
+
+// Join table for many-to-many relationship between Todo and Tag
+model TodoTag {
+  id    String @id @default(cuid())
+  todoId String
+  tagId String
+
+  // Relations
+  todo Todo @relation(fields: [todoId], references: [id], onDelete: Cascade)
+  tag  Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([todoId, tagId])
+  @@index([todoId])
+  @@index([tagId])
+  @@map("todo_tags")
+}
+
+// Enum for todo status
+enum TodoStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+// Enum for todo priority
+enum TodoPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+// Todo model for task management
+model Todo {
+  id                String    @id @default(cuid())
+  userId            String
+  categoryId        String?
+  title             String
+  description       String    @default("")
+  status            TodoStatus @default(TODO)
+  priority          TodoPriority @default(MEDIUM)
+  startDate         DateTime?
+  dueDate           DateTime?
+  reminderLeadTime  Int?      // in minutes before due date
+  recurrenceRuleId  String?
+  completedAt       DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relations
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category          Category? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  tags              TodoTag[]
+  subtasks          Subtask[]
+  attachments       Attachment[]
+  reminders         Reminder[]
+  recurrenceRule    RecurrenceRule? @relation(fields: [recurrenceRuleId], references: [id], onDelete: SetNull)
+  activityLogs      ActivityLog[]
+
+  @@index([userId])
+  @@index([categoryId])
+  @@index([status])
+  @@index([dueDate])
+  @@map("todos")
+}
+
+// Subtask model for breaking down todos
+model Subtask {
+  id        String   @id @default(cuid())
+  todoId    String
+  userId    String
+  title     String
+  completed Boolean  @default(false)
+  ordering  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  todo Todo @relation(fields: [todoId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([todoId])
+  @@index([userId])
+  @@map("subtasks")
+}
+
+// Attachment model for todo attachments (metadata only)
+model Attachment {
+  id        String   @id @default(cuid())
+  todoId    String
+  userId    String
+  fileName  String
+  fileSize  Int
+  mimeType  String
+  url       String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  todo Todo @relation(fields: [todoId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([todoId])
+  @@index([userId])
+  @@map("attachments")
+}
+
+// Enum for reminder channel
+enum ReminderChannel {
+  IN_APP
+  EMAIL
+  PUSH
+}
+
+// Reminder model for todo reminders
+model Reminder {
+  id        String   @id @default(cuid())
+  todoId    String
+  userId    String
+  scheduledAt DateTime
+  channel   ReminderChannel @default(IN_APP)
+  sent      Boolean  @default(false)
+  sentAt    DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  todo Todo @relation(fields: [todoId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([todoId])
+  @@index([userId])
+  @@index([scheduledAt])
+  @@map("reminders")
+}
+
+// Enum for recurrence frequency
+enum RecurrenceFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+  YEARLY
+}
+
+// RecurrenceRule model for recurring todos
+model RecurrenceRule {
+  id          String   @id @default(cuid())
+  frequency   RecurrenceFrequency
+  interval    Int      @default(1)
+  byWeekday   Json?    // ["MO", "WE", "FR"] - ISO weekday strings
+  byMonthDay  Json?    // [1, 15, -1] - day of month
+  endDate     DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  todos Todo[]
+
+  @@map("recurrence_rules")
+}
+
+// Enum for view preference type
+enum ViewType {
+  LIST
+  BOARD
+  CALENDAR
+  TIMELINE
+}
+
+// ViewPreference model for user view preferences
+model ViewPreference {
+  id        String   @id @default(cuid())
+  userId    String
+  viewType  ViewType @default(LIST)
+  filters   Json     @default("{}")
+  sorting   Json     @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, viewType])
+  @@index([userId])
+  @@map("view_preferences")
+}
+
+// Enum for activity type
+enum ActivityType {
+  CREATED
+  UPDATED
+  DELETED
+  COMPLETED
+  COMMENTED
+  ASSIGNED
+  TAGGED
+  STATUS_CHANGED
+}
+
+// ActivityLog model for tracking changes
+model ActivityLog {
+  id        String   @id @default(cuid())
+  todoId    String
+  userId    String
+  type      ActivityType
+  changes   Json?    // { before: {}, after: {} }
+  createdAt DateTime @default(now())
+
+  // Relations
+  todo Todo @relation(fields: [todoId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([todoId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("activity_logs")
+}
