@@ -102,6 +102,20 @@ Start both frontend and backend in development mode:
 npm run dev
 ```
 
+Or start them individually:
+
+```bash
+# Frontend only (port 5173)
+cd frontend
+npm run dev
+
+# Backend only (port 3001)
+cd backend
+npm run dev
+```
+
+The frontend is configured to proxy API requests to the backend automatically.
+
 ### Code Quality
 
 Run linting and formatting:
@@ -143,12 +157,17 @@ npm run test
 
 ### Frontend Architecture
 
-- Component-based React architecture
-- Route-based code splitting
+- Component-based React architecture with TypeScript
+- Route-based code splitting with Vite
 - Server state management with TanStack Query
-- Form management with React Hook Form
-- Responsive design with Tailwind CSS
-- Type-safe API client generation
+- UI state management with Zustand (theme, etc.)
+- Form management with React Hook Form + Zod validation
+- Responsive design with Tailwind CSS and custom theme
+- Type-safe API client with Axios interceptors
+- Theme system (light/dark/system) with persistence
+- Reusable UI components (Button, Card, Input, etc.)
+- Layout system with sidebar and topbar navigation
+- Comprehensive test suite with Vitest + React Testing Library
 
 ### Database Architecture
 
@@ -209,6 +228,13 @@ npm run test
 - [ ] Time tracking
 - [ ] Progress reports
 - [ ] Goal setting
+
+## Documentation
+
+- **Backend**: See [backend/README.md](backend/README.md) for API documentation
+- **Frontend**: See [frontend/README.md](frontend/README.md) for architecture and setup
+- **Database**: See [docs/database.md](docs/database.md) for schema and setup details
+- **Frontend Setup**: See [FRONTEND_SETUP.md](FRONTEND_SETUP.md) for quick start guide
 
 ## Environment Variables
 
