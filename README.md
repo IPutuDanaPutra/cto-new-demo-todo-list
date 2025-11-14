@@ -19,11 +19,12 @@ A full-stack React + Node.js application for managing tasks and todos with advan
 - **Node.js** - JavaScript runtime
 - **Express.js** - Web application framework
 - **TypeScript** - Type-safe JavaScript development
-- **Prisma** - Modern database toolkit and ORM
-- **PostgreSQL** - Primary database
+- **Prisma ORM** - Modern database toolkit with migrations and client generation
+- **PostgreSQL** - Primary relational database
 - **JWT** - Authentication tokens
 - **bcrypt** - Password hashing
 - **Zod** - Schema validation
+- **Winston** - Structured logging
 
 ### Development Tools
 
@@ -62,6 +63,36 @@ todo-platform/
    ```bash
    npm run install:all
    ```
+
+### Database Setup
+
+1. Start PostgreSQL using Docker:
+
+   ```bash
+   docker compose up -d db
+   ```
+
+2. Configure database in `backend/.env`:
+
+   ```bash
+   cp backend/.env.example backend/.env
+   # Edit DATABASE_URL if needed
+   ```
+
+3. Run migrations and seed data:
+
+   ```bash
+   cd backend
+   npm run db:migrate
+   npm run db:seed
+   ```
+
+4. (Optional) Open Prisma Studio to view data:
+   ```bash
+   npm run db:studio
+   ```
+
+See [docs/database.md](docs/database.md) for detailed database instructions.
 
 ### Development
 
@@ -103,10 +134,12 @@ npm run test
 
 - RESTful API design with Express.js
 - Layered architecture: routes → controllers → services → repositories
-- Database access through Prisma ORM
+- Data access layer with repository pattern for Prisma integration
+- Database access through Prisma ORM with type safety
 - JWT-based authentication
 - Input validation with Zod schemas
-- Error handling middleware
+- Error handling middleware with correlation IDs
+- Structured logging with Winston
 
 ### Frontend Architecture
 
@@ -117,13 +150,23 @@ npm run test
 - Responsive design with Tailwind CSS
 - Type-safe API client generation
 
-### Database Schema
+### Database Architecture
 
-- Users table for authentication
-- Todos table for task management
-- Categories for task organization
-- Tags for flexible labeling
-- User preferences and settings
+- PostgreSQL relational database with Prisma ORM
+- Comprehensive schema covering:
+  - User management and preferences
+  - Categories for task organization
+  - Tags with many-to-many relationships
+  - Todo management with status and priority
+  - Subtasks for breaking down todos
+  - Attachments with metadata
+  - Reminders with multiple channels
+  - Recurrence rules for recurring todos
+  - Activity logs for audit trails
+  - View preferences for different display modes
+- Strategic indexing for performance
+- Cascading deletes for data integrity
+- Migrations managed through Prisma Migrate
 
 ## Development Workflow
 
