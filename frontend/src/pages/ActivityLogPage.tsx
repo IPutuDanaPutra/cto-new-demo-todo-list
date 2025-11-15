@@ -81,8 +81,8 @@ export function ActivityLogPage() {
 
   const { data: activityData, isLoading } = useActivityLog({
     type: typeFilter,
-    from: dateFrom || undefined,
-    to: dateTo || undefined,
+    dateFrom: dateFrom || undefined,
+    dateTo: dateTo || undefined,
   });
 
   const filteredActivities = useMemo(() => {
