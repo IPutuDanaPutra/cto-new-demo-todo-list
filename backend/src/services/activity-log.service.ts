@@ -7,10 +7,13 @@ export class ActivityLogService {
   async getActivityLogs(
     userId: string,
     query: ActivityLogQuery
-  ): Promise<{ data: ActivityLog[]; meta: { total: number; page: number; limit: number } }> {
+  ): Promise<{
+    data: ActivityLog[];
+    meta: { total: number; page: number; limit: number };
+  }> {
     const { todoId, type, dateFrom, dateTo, page = 1, limit = 20 } = query;
 
-    const where: any = {
+    const where: Record<string, unknown> = {
       userId,
     };
 
@@ -60,18 +63,18 @@ export class ActivityLogService {
     };
   }
 
-  async createActivityLog(
-    userId: string,
-    todoId: string,
-    type: ActivityType,
-    changes?: any
-  ): Promise<ActivityLog> {
+  async createActivityLog(params: {
+    userId: string;
+    todoId: string;
+    type: ActivityType;
+    changes?: Record<string, unknown>;
+  }): Promise<ActivityLog> {
     return await prisma.activityLog.create({
       data: {
-        userId,
-        todoId,
-        type,
-        changes,
+        userId: params.userId,
+        todoId: params.todoId,
+        type: params.type,
+        changes: params.changes,
       },
       include: {
         todo: {
