@@ -13,6 +13,7 @@ import recurrenceRoutes from './recurrence.routes';
 import userPreferencesRoutes from './user-preferences.routes';
 import savedFilterRoutes from './saved-filter.routes';
 import analyticsRoutes from './analytics.routes';
+import bulkOperationsRoutes from './bulk-operations.routes';
 
 const router = Router();
 
@@ -30,5 +31,6 @@ router.use('/recurrence', recurrenceRoutes);
 router.use('/user-preferences', userPreferencesRoutes);
 router.use('/saved-filters', savedFilterRoutes);
 router.use('/analytics', analyticsRoutes);
+router.use('/bulk', bulkOperationsRoutes);
 
 export default router;

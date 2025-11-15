@@ -1,14 +1,23 @@
 import { Server } from 'http';
 import { createApp } from './app';
 import { env, logger, initializeDatabase, disconnectDatabase } from './config';
+import { SchedulerService } from './services/scheduler.service';
 
 const app = createApp();
+let schedulerService: SchedulerService | null = null;
 
 let server: Server | null = null;
 
 async function startServer() {
   try {
     await initializeDatabase();
+
+    // Initialize scheduler service
+    if (env.NODE_ENV !== 'test') {
+      schedulerService = new SchedulerService();
+      await schedulerService.start();
+      logger.info('📅 Scheduler service started');
+    }
 
     server = app.listen(env.PORT, () => {
       logger.info(`🚀 Server is running on port ${env.PORT}`);
@@ -23,6 +32,16 @@ async function startServer() {
 
 const gracefulShutdown = async (signal: string) => {
   logger.info(`${signal} received, shutting down gracefully...`);
+
+  // Stop scheduler service first
+  if (schedulerService) {
+    try {
+      await schedulerService.stop();
+      logger.info('📅 Scheduler service stopped');
+    } catch (error) {
+      logger.error('Error stopping scheduler service:', error);
+    }
+  }
 
   if (server) {
     server.close(async () => {

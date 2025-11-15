@@ -12,17 +12,27 @@ import {
   ListTodoQuery,
 } from '../schemas';
 import { getPrismaClient } from '../config';
+import { UserPreferencesService } from './user-preferences.service';
+import { ReminderService } from './reminder.service';
+import { ActivityLogService } from './activity-log.service';
+import { logger } from '../config/logger';
 
 export class TodoService {
   private todoRepository = new TodoRepository();
   private tagRepository = new TagRepository();
   private categoryRepository = new CategoryRepository();
   private prisma = getPrismaClient();
+  private userPreferencesService = new UserPreferencesService();
+  private reminderService = new ReminderService();
+  private activityLogService = new ActivityLogService();
 
   async createTodo(userId: string, data: CreateTodoInput) {
+    // Apply user defaults to todo data
+    const todoDataWithDefaults = await this.userPreferencesService.applyDefaultsToTodoData(userId, data);
+
     // Verify category exists if provided
-    if (data.categoryId) {
-      const category = await this.categoryRepository.findById(data.categoryId);
+    if (todoDataWithDefaults.categoryId) {
+      const category = await this.categoryRepository.findById(todoDataWithDefaults.categoryId);
       if (!category) {
         throw ApiError.notFound('Category not found');
       }
@@ -31,20 +41,20 @@ export class TodoService {
     const todo = await this.prisma.todo.create({
       data: {
         user: { connect: { id: userId } },
-        title: data.title,
-        description: data.description || '',
-        status: data.status || 'TODO',
-        priority: data.priority || 'MEDIUM',
-        ...(data.categoryId && {
-          category: { connect: { id: data.categoryId } },
+        title: todoDataWithDefaults.title,
+        description: todoDataWithDefaults.description || '',
+        status: todoDataWithDefaults.status || 'TODO',
+        priority: todoDataWithDefaults.priority || 'MEDIUM',
+        ...(todoDataWithDefaults.categoryId && {
+          category: { connect: { id: todoDataWithDefaults.categoryId } },
         }),
-        startDate: data.startDate,
-        dueDate: data.dueDate,
-        reminderLeadTime: data.reminderLeadTime,
+        startDate: todoDataWithDefaults.startDate,
+        dueDate: todoDataWithDefaults.dueDate,
+        reminderLeadTime: todoDataWithDefaults.reminderLeadTime,
         tags:
-          data.tagIds && data.tagIds.length > 0
+          todoDataWithDefaults.tagIds && todoDataWithDefaults.tagIds.length > 0
             ? {
-                create: data.tagIds.map((tagId) => ({ tagId })),
+                create: todoDataWithDefaults.tagIds.map((tagId: string) => ({ tagId })),
               }
             : undefined,
       },
@@ -53,6 +63,30 @@ export class TodoService {
         subtasks: true,
         attachments: true,
       },
+    });
+
+    // Create automatic reminders if enabled
+    try {
+      const shouldCreateReminder = await this.userPreferencesService.shouldCreateReminder(userId, todoDataWithDefaults);
+      if (shouldCreateReminder) {
+        await this.reminderService.createAutomaticReminders(userId, todo.id);
+      }
+    } catch (error) {
+      // Log error but don't fail the todo creation
+      logger.error('Failed to create automatic reminders:', error);
+    }
+
+    // Log activity
+    await this.activityLogService.createActivityLog({
+      todoId: todo.id,
+      userId,
+      type: 'CREATED',
+      changes: {
+        title: todo.title,
+        description: todo.description,
+        priority: todo.priority,
+        dueDate: todo.dueDate,
+      } as any,
     });
 
     return todo;
@@ -81,15 +115,15 @@ export class TodoService {
       await this.todoRepository.findByUserIdWithPagination(userId, {
         skip,
         take: query.limit,
-        status: query.status,
-        categoryId: query.categoryId,
-        priority: query.priority,
-        tagId: query.tagId,
-        dueDateFrom: query.dueDateFrom,
-        dueDateTo: query.dueDateTo,
-        search: query.search,
-        sortBy: query.sortBy,
-        sortOrder: query.sortOrder,
+        ...(query.status && { status: query.status }),
+        ...(query.categoryId && { categoryId: query.categoryId }),
+        ...(query.priority && { priority: query.priority }),
+        ...(query.tagId && { tagId: query.tagId }),
+        ...(query.dueDateFrom && { dueDateFrom: query.dueDateFrom }),
+        ...(query.dueDateTo && { dueDateTo: query.dueDateTo }),
+        ...(query.search && { search: query.search }),
+        ...(query.sortBy && { sortBy: query.sortBy }),
+        ...(query.sortOrder && { sortOrder: query.sortOrder }),
       });
 
     return {
