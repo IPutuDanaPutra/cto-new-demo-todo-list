@@ -10,3 +10,4 @@ export * from './reminder.schemas';
 export * from './recurrence.schemas';
 export * from './user-preferences.schemas';
 export * from './saved-filter.schemas';
+export * from './bulk-operations.schemas';

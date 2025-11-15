@@ -96,7 +96,8 @@ export class RecurrenceService {
 
   private calculateNextOccurrence(currentDate: Date, rule: RecurrenceRule): Date {
     const nextDate = new Date(currentDate);
-
+    
+    // Move to next interval first
     switch (rule.frequency) {
       case 'DAILY':
         nextDate.setDate(nextDate.getDate() + rule.interval);
@@ -106,11 +107,31 @@ export class RecurrenceService {
         nextDate.setDate(nextDate.getDate() + (7 * rule.interval));
         if (rule.byWeekday) {
           const weekdays = JSON.parse(rule.byWeekday as string) as string[];
-          // Find next matching weekday
-          const currentDay = nextDate.getDay();
-          const targetDay = parseInt(weekdays[0]); // Simplified for now
-          const daysToAdd = (targetDay - currentDay + 7) % 7 || 7;
-          nextDate.setDate(nextDate.getDate() + daysToAdd);
+          // Map ISO weekday strings to numbers (0=Sunday, 1=Monday, etc.)
+          const weekdayMap: Record<string, number> = {
+            'SU': 0, 'MO': 1, 'TU': 2, 'WE': 3, 'TH': 4, 'FR': 5, 'SA': 6
+          };
+          
+          // Find the next valid weekday
+          let daysToAdd = 0;
+          let found = false;
+          
+          for (let i = 0; i < 7; i++) {
+            const checkDate = new Date(nextDate);
+            checkDate.setDate(checkDate.getDate() + i);
+            const dayOfWeek = checkDate.getDay();
+            const dayString = Object.keys(weekdayMap).find(key => weekdayMap[key] === dayOfWeek);
+            
+            if (dayString && weekdays.includes(dayString)) {
+              daysToAdd = i;
+              found = true;
+              break;
+            }
+          }
+          
+          if (found) {
+            nextDate.setDate(nextDate.getDate() + daysToAdd);
+          }
         }
         break;
 
@@ -118,7 +139,15 @@ export class RecurrenceService {
         nextDate.setMonth(nextDate.getMonth() + rule.interval);
         if (rule.byMonthDay) {
           const monthDays = JSON.parse(rule.byMonthDay as string) as number[];
-          nextDate.setDate(monthDays[0] || 1); // Simplified for now
+          // Handle negative values (counting from end of month)
+          const targetDay = monthDays[0] || 1;
+          if (targetDay > 0) {
+            nextDate.setDate(Math.min(targetDay, this.getDaysInMonth(nextDate.getFullYear(), nextDate.getMonth())));
+          } else {
+            // Negative day means count from end of month (-1 = last day, -2 = second to last, etc.)
+            const daysInMonth = this.getDaysInMonth(nextDate.getFullYear(), nextDate.getMonth());
+            nextDate.setDate(daysInMonth + targetDay + 1);
+          }
         }
         break;
 
@@ -128,6 +157,10 @@ export class RecurrenceService {
     }
 
     return nextDate;
+  }
+  
+  private getDaysInMonth(year: number, month: number): number {
+    return new Date(year, month + 1, 0).getDate();
   }
 
   async applyRecurrenceToTodo(

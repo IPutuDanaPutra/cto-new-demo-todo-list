@@ -11,3 +11,6 @@ export { RecurrenceService } from './recurrence.service';
 export { UserPreferencesService } from './user-preferences.service';
 export { SavedFilterService } from './saved-filter.service';
 export { AnalyticsService } from './analytics.service';
+export { BulkOperationsService } from './bulk-operations.service';
+export { QueueService } from './queue.service';
+export { SchedulerService } from './scheduler.service';
