@@ -1,5 +1,5 @@
 import { PrismaClient, TodoStatus, TodoPriority } from '@prisma/client';
-import { BulkUpdateInput, BulkActionInput } from '../schemas';
+import { BulkUpdateInput } from '../schemas';
 import { ActivityLogService } from './activity-log.service';
 import { logger } from '../config/logger';
 
@@ -36,11 +36,13 @@ export class BulkOperationsService {
           }
 
           // Update the todo
-          const updatedTodo = await tx.todo.update({
+          await tx.todo.update({
             where: { id: todoId },
             data: {
               status,
-              ...(status === 'DONE' ? { completedAt: new Date() } : { completedAt: null }),
+              ...(status === 'DONE'
+                ? { completedAt: new Date() }
+                : { completedAt: null }),
             },
           });
 
@@ -338,12 +340,7 @@ export class BulkOperationsService {
             continue;
           }
 
-          // Delete the todo (this will cascade delete related records)
-          await tx.todo.delete({
-            where: { id: todoId },
-          });
-
-          // Log activity
+          // Log activity before deletion (since cascade will delete logs too)
           await this.activityLogService.createActivityLog({
             todoId,
             userId,
@@ -351,6 +348,11 @@ export class BulkOperationsService {
             changes: {
               title: currentTodo.title,
             },
+          });
+
+          // Delete the todo (this will cascade delete related records including the log we just created)
+          await tx.todo.delete({
+            where: { id: todoId },
           });
 
           deleted++;
@@ -378,12 +380,12 @@ export class BulkOperationsService {
           // Get current todo for activity log
           const currentTodo = await tx.todo.findFirst({
             where: { id: todoId, userId },
-            select: { 
-              id: true, 
-              title: true, 
-              status: true, 
-              priority: true, 
-              dueDate: true, 
+            select: {
+              id: true,
+              title: true,
+              status: true,
+              priority: true,
+              dueDate: true,
               categoryId: true,
               reminderLeadTime: true,
             },
@@ -395,8 +397,8 @@ export class BulkOperationsService {
           }
 
           // Prepare update data
-          const updateData: any = {};
-          
+          const updateData: Record<string, unknown> = {};
+
           if (updates.status !== undefined) {
             updateData.status = updates.status;
             if (updates.status === 'DONE') {
@@ -405,19 +407,19 @@ export class BulkOperationsService {
               updateData.completedAt = null;
             }
           }
-          
+
           if (updates.priority !== undefined) {
             updateData.priority = updates.priority;
           }
-          
+
           if (updates.dueDate !== undefined) {
             updateData.dueDate = updates.dueDate;
           }
-          
+
           if (updates.categoryId !== undefined) {
             updateData.categoryId = updates.categoryId;
           }
-          
+
           if (updates.reminderLeadTime !== undefined) {
             updateData.reminderLeadTime = updates.reminderLeadTime;
           }
@@ -435,11 +437,21 @@ export class BulkOperationsService {
             type: updates.status !== undefined ? 'STATUS_CHANGED' : 'UPDATED',
             changes: {
               before: {
-                ...(updates.status !== undefined && { status: currentTodo.status }),
-                ...(updates.priority !== undefined && { priority: currentTodo.priority }),
-                ...(updates.dueDate !== undefined && { dueDate: currentTodo.dueDate }),
-                ...(updates.categoryId !== undefined && { categoryId: currentTodo.categoryId }),
-                ...(updates.reminderLeadTime !== undefined && { reminderLeadTime: currentTodo.reminderLeadTime }),
+                ...(updates.status !== undefined && {
+                  status: currentTodo.status,
+                }),
+                ...(updates.priority !== undefined && {
+                  priority: currentTodo.priority,
+                }),
+                ...(updates.dueDate !== undefined && {
+                  dueDate: currentTodo.dueDate,
+                }),
+                ...(updates.categoryId !== undefined && {
+                  categoryId: currentTodo.categoryId,
+                }),
+                ...(updates.reminderLeadTime !== undefined && {
+                  reminderLeadTime: currentTodo.reminderLeadTime,
+                }),
               },
               after: updates,
             },
