@@ -101,6 +101,16 @@ export interface ActivityLogQuery {
   limit?: number;
 }
 
+export interface ActivityLogResponse {
+  data: ActivityLog[];
+  meta: {
+    total: number;
+    page: number;
+    limit: number;
+    pages: number;
+  };
+}
+
 export interface SavedFilterPayload {
   name: string;
   viewType: SavedFilter['viewType'];
@@ -232,19 +242,21 @@ export const deleteReminder = async (reminderId: string): Promise<void> => {
 
 export const fetchActivityLog = async (
   query: ActivityLogQuery = {}
-): Promise<ActivityLog[]> => {
-  const response = await apiClient.get<{
-    data: ActivityLog[];
-    meta: {
-      total: number;
-      page: number;
-      limit: number;
-      pages: number;
-    };
-  }>('/activity-logs', {
-    params: query,
-  });
-  return response.data.data;
+): Promise<ActivityLogResponse> => {
+  const response = await apiClient.get<ActivityLogResponse>(
+    '/activity-logs',
+    {
+      params: {
+        ...(query.todoId ? { todoId: query.todoId } : {}),
+        ...(query.type ? { type: query.type } : {}),
+        ...(query.dateFrom ? { dateFrom: query.dateFrom } : {}),
+        ...(query.dateTo ? { dateTo: query.dateTo } : {}),
+        ...(typeof query.page === 'number' ? { page: query.page } : {}),
+        ...(typeof query.limit === 'number' ? { limit: query.limit } : {}),
+      },
+    }
+  );
+  return response.data;
 };
 
 export const fetchSavedFilters = async (): Promise<SavedFilter[]> => {

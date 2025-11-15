@@ -444,7 +444,7 @@ function TodoWorkspaceInternal({
               update: todoMutations.updateReminderMutation,
               remove: todoMutations.deleteReminderMutation,
             }}
-            activityLog={activityLog.data ?? []}
+            activityLog={activityLog.data?.data ?? []}
             activityLoading={activityLog.isLoading}
             onActivityFilterChange={(filters) => {
               setActivityTypeFilter(filters.type);

@@ -44,6 +44,7 @@ export interface ActivityLog {
     | 'STATUS_CHANGED';
   changes: Record<string, unknown> | null;
   createdAt: string;
+  todo?: Pick<Todo, 'id' | 'title' | 'status' | 'priority'> | null;
 }
 
 export interface TodoSubtask {

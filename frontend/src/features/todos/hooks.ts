@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import {
@@ -29,7 +29,6 @@ import {
   updateUserPreferences,
 } from './api';
 import {
-  ActivityLog,
   AnalyticsSummary,
   Category,
   SavedFilter,
@@ -40,6 +39,7 @@ import {
 } from '@/types';
 import {
   ActivityLogQuery,
+  ActivityLogResponse,
   RecurrencePayload,
   ReminderPayload,
   TodoListQuery,
@@ -94,21 +94,33 @@ export const useTodoDetail = (todoId: string | null) => {
   );
 };
 
+type ActivityLogParams = ActivityLogQuery & { todoId?: string | null };
+
 export const useActivityLog = (
-  todoId: string | null,
-  query: ActivityLogQuery
+  arg1: ActivityLogParams | string | null,
+  arg2?: ActivityLogQuery
 ) => {
-  return useQuery<ActivityLog[], Error, ActivityLog[]>(
-    todoId ? todoKeys.activity(todoId, query) : ['todos', 'activity', 'empty'],
-    () => {
-      const fullQuery: ActivityLogQuery = { ...query };
-      if (todoId) {
-        fullQuery.todoId = todoId;
-      }
-      return fetchActivityLog(fullQuery);
-    },
+  const params: ActivityLogParams =
+    typeof arg1 === 'string' || arg1 === null
+      ? {
+          ...(arg2 ?? {}),
+          ...(arg1 ? { todoId: arg1 } : {}),
+        }
+      : arg1;
+
+  const { todoId, ...queryParams } = params;
+
+  return useQuery<ActivityLogResponse, Error, ActivityLogResponse>(
+    todoId
+      ? todoKeys.activity(todoId, queryParams)
+      : ['activity-logs', queryParams],
+    () =>
+      fetchActivityLog({
+        ...queryParams,
+        ...(todoId ? { todoId } : {}),
+      }),
     {
-      enabled: Boolean(todoId),
+      enabled: todoId ? Boolean(todoId) : true,
     }
   );
 };
@@ -127,7 +139,7 @@ export const useUserPreferences = () => {
   );
 };
 
-export const useAnalyticsSummary = (query: TodoListQuery) => {
+export const useAnalyticsSummary = (query: TodoListQuery = {}) => {
   return useQuery<AnalyticsSummary, Error, AnalyticsSummary>(
     todoKeys.analytics(query),
     () => fetchAnalyticsSummary(query),
@@ -137,7 +149,7 @@ export const useAnalyticsSummary = (query: TodoListQuery) => {
   );
 };
 
-export const useSearchTodos = (term: string, enabled: boolean) => {
+export const useSearchTodosQuery = (term: string, enabled: boolean) => {
   return useQuery(todoKeys.search(term), () => searchTodos(term), {
     enabled,
   });
@@ -432,5 +444,15 @@ export const useSearchTodosMutation = () => {
         toast.error('Search failed: ' + error.message);
       },
     }
+  );
+};
+
+export const useSearchTodos = () => {
+  const mutation = useSearchTodosMutation();
+
+  return useCallback(
+    async (term: string, filters?: unknown) =>
+      mutation.mutateAsync({ term, filters }),
+    [mutation]
   );
 };
