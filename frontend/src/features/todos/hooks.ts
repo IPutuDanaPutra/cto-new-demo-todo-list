@@ -3,9 +3,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import toast from 'react-hot-toast';
 import {
   bulkUpdateTodos,
-  cancelRecurrence,
+  bulkDeleteTodos,
+  createRecurrenceRule,
+  updateRecurrenceRule,
+  deleteRecurrenceRule,
+  applyRecurrenceToTodo,
   completeTodo,
-  completeRecurrenceSeries,
   createReminder,
   createTodo,
   deleteFilter,
@@ -19,21 +22,17 @@ import {
   fetchTodos,
   fetchUserPreferences,
   markTodoIncomplete,
-  reorderTodos,
   saveFilter,
   searchTodos,
   updateReminderRequest,
   updateTodo,
   updateUserPreferences,
-  updateRecurrence,
 } from './api';
 import {
   ActivityLog,
   AnalyticsSummary,
   Category,
-  Reminder,
   SavedFilter,
-  SearchResult,
   Tag,
   Todo,
   TodoListItem,
@@ -41,11 +40,8 @@ import {
 } from '@/types';
 import {
   ActivityLogQuery,
-  BulkUpdatePayload,
-  PreferencesPayload,
   RecurrencePayload,
   ReminderPayload,
-  ReorderPayload,
   TodoListQuery,
   TodoMutationPayload,
 } from './api';
@@ -98,10 +94,19 @@ export const useTodoDetail = (todoId: string | null) => {
   );
 };
 
-export const useActivityLog = (todoId: string | null, query: ActivityLogQuery) => {
+export const useActivityLog = (
+  todoId: string | null,
+  query: ActivityLogQuery
+) => {
   return useQuery<ActivityLog[], Error, ActivityLog[]>(
     todoId ? todoKeys.activity(todoId, query) : ['todos', 'activity', 'empty'],
-    () => fetchActivityLog(todoId || '', query),
+    () => {
+      const fullQuery: ActivityLogQuery = { ...query };
+      if (todoId) {
+        fullQuery.todoId = todoId;
+      }
+      return fetchActivityLog(fullQuery);
+    },
     {
       enabled: Boolean(todoId),
     }
@@ -133,13 +138,9 @@ export const useAnalyticsSummary = (query: TodoListQuery) => {
 };
 
 export const useSearchTodos = (term: string, enabled: boolean) => {
-  return useQuery<SearchResult[], Error, SearchResult[]>(
-    todoKeys.search(term),
-    () => searchTodos(term),
-    {
-      enabled,
-    }
-  );
+  return useQuery(todoKeys.search(term), () => searchTodos(term), {
+    enabled,
+  });
 };
 
 export const useCategories = () => {
@@ -175,8 +176,13 @@ export const useTodoMutations = () => {
   });
 
   const update = useMutation(
-    ({ todoId, payload }: { todoId: string; payload: Partial<TodoMutationPayload> }) =>
-      updateTodo(todoId, payload),
+    ({
+      todoId,
+      payload,
+    }: {
+      todoId: string;
+      payload: Partial<TodoMutationPayload>;
+    }) => updateTodo(todoId, payload),
     {
       onSuccess: (data) => {
         invalidateLists();
@@ -210,13 +216,15 @@ export const useTodoMutations = () => {
     }
   );
 
-  const recurrenceMutation = useMutation(
+  const createRecurrence = useMutation(
     ({ todoId, payload }: { todoId: string; payload: RecurrencePayload }) =>
-      updateRecurrence(todoId, payload),
+      createRecurrenceRule(payload).then((rule) =>
+        applyRecurrenceToTodo(todoId).then(() => rule)
+      ),
     {
       onSuccess: (_, variables) => {
         invalidateLists();
-        toast.success('Recurrence updated');
+        toast.success('Recurrence created');
         void queryClient.invalidateQueries({
           queryKey: todoKeys.detail(variables.todoId),
         });
@@ -227,26 +235,29 @@ export const useTodoMutations = () => {
     }
   );
 
-  const cancelRecurrenceMutation = useMutation(cancelRecurrence, {
-    onSuccess: (_, todoId) => {
+  const updateRecurrence = useMutation(
+    ({
+      ruleId,
+      payload,
+    }: {
+      ruleId: string;
+      payload: Partial<RecurrencePayload>;
+    }) => updateRecurrenceRule(ruleId, payload),
+    {
+      onSuccess: () => {
+        invalidateLists();
+        toast.success('Recurrence updated');
+      },
+      onError: (error: Error) => {
+        toast.error(error.message);
+      },
+    }
+  );
+
+  const deleteRecurrence = useMutation(deleteRecurrenceRule, {
+    onSuccess: () => {
       invalidateLists();
       toast.success('Recurrence cancelled');
-      void queryClient.invalidateQueries({
-        queryKey: todoKeys.detail(todoId),
-      });
-    },
-    onError: (error: Error) => {
-      toast.error(error.message);
-    },
-  });
-
-  const completeSeriesMutation = useMutation(completeRecurrenceSeries, {
-    onSuccess: (_, todoId) => {
-      invalidateLists();
-      toast.success('Series completed');
-      void queryClient.invalidateQueries({
-        queryKey: todoKeys.detail(todoId),
-      });
     },
     onError: (error: Error) => {
       toast.error(error.message);
@@ -255,12 +266,12 @@ export const useTodoMutations = () => {
 
   const createReminderMutation = useMutation(
     ({ todoId, payload }: { todoId: string; payload: ReminderPayload }) =>
-      createReminder(todoId, payload),
+      createReminder({ todoId, ...payload }),
     {
-      onSuccess: (_, variables) => {
+      onSuccess: (_, { todoId }) => {
         toast.success('Reminder added');
         void queryClient.invalidateQueries({
-          queryKey: todoKeys.detail(variables.todoId),
+          queryKey: todoKeys.detail(todoId),
         });
       },
       onError: (error: Error) => {
@@ -271,19 +282,19 @@ export const useTodoMutations = () => {
 
   const updateReminderMutation = useMutation(
     ({
-      todoId,
+      todoId: _todoId,
       reminderId,
       payload,
     }: {
       todoId: string;
       reminderId: string;
       payload: Partial<ReminderPayload>;
-    }) => updateReminderRequest(todoId, reminderId, payload),
+    }) => updateReminderRequest(reminderId, payload),
     {
-      onSuccess: (_, variables) => {
+      onSuccess: (_, { todoId }) => {
         toast.success('Reminder updated');
         void queryClient.invalidateQueries({
-          queryKey: todoKeys.detail(variables.todoId),
+          queryKey: todoKeys.detail(todoId),
         });
       },
       onError: (error: Error) => {
@@ -293,13 +304,13 @@ export const useTodoMutations = () => {
   );
 
   const deleteReminderMutation = useMutation(
-    ({ todoId, reminderId }: { todoId: string; reminderId: string }) =>
-      deleteReminder(todoId, reminderId),
+    ({ todoId: _todoId, reminderId }: { todoId: string; reminderId: string }) =>
+      deleteReminder(reminderId),
     {
-      onSuccess: (_, variables) => {
+      onSuccess: (_, { todoId }) => {
         toast.success('Reminder removed');
         void queryClient.invalidateQueries({
-          queryKey: todoKeys.detail(variables.todoId),
+          queryKey: todoKeys.detail(todoId),
         });
       },
       onError: (error: Error) => {
@@ -318,10 +329,10 @@ export const useTodoMutations = () => {
     },
   });
 
-  const reorderMutation = useMutation(reorderTodos, {
+  const bulkDeleteMutation = useMutation(bulkDeleteTodos, {
     onSuccess: () => {
       invalidateLists();
-      toast.success('Todos reordered');
+      toast.success('Todos deleted');
     },
     onError: (error: Error) => {
       toast.error(error.message);
@@ -333,24 +344,24 @@ export const useTodoMutations = () => {
       create,
       update,
       toggleComplete,
-      recurrenceMutation,
-      cancelRecurrenceMutation,
-      completeSeriesMutation,
+      createRecurrence,
+      updateRecurrence,
+      deleteRecurrence,
       createReminderMutation,
       updateReminderMutation,
       deleteReminderMutation,
       bulkUpdateMutation,
-      reorderMutation,
+      bulkDeleteMutation,
     }),
     [
       bulkUpdateMutation,
-      cancelRecurrenceMutation,
-      completeSeriesMutation,
+      bulkDeleteMutation,
+      createRecurrence,
+      updateRecurrence,
+      deleteRecurrence,
       create,
       createReminderMutation,
       deleteReminderMutation,
-      recurrenceMutation,
-      reorderMutation,
       toggleComplete,
       update,
       updateReminderMutation,
@@ -412,10 +423,14 @@ export const useUserPreferencesMutations = () => {
   return { updatePreferences };
 };
 
-export const useSearchTodos = () => {
-  return useMutation(searchTodos, {
-    onError: (error: Error) => {
-      toast.error('Search failed: ' + error.message);
-    },
-  });
+export const useSearchTodosMutation = () => {
+  return useMutation(
+    ({ term, filters }: { term: string; filters?: unknown }) =>
+      searchTodos(term, filters),
+    {
+      onError: (error: Error) => {
+        toast.error('Search failed: ' + error.message);
+      },
+    }
+  );
 };

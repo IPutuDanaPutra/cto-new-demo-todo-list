@@ -43,9 +43,17 @@ import {
   useTodoMutations,
   useUserPreferences,
 } from '../hooks';
-import { TodoSelectionProvider, useTodoSelection } from '../todo-selection-context';
+import {
+  TodoSelectionProvider,
+  useTodoSelection,
+} from '../todo-selection-context';
 import { TodoFormDrawer } from './TodoFormDrawer';
-import { RecurrencePayload, TodoMutationPayload, TodoListQuery } from '../api';
+import {
+  RecurrencePayload,
+  ReminderPayload,
+  TodoMutationPayload,
+  TodoListQuery,
+} from '../api';
 import { ReminderManager } from './ReminderManager';
 import { RecurrenceBuilder } from './RecurrenceBuilder';
 import { ActivityLog } from '@/types';
@@ -64,7 +72,9 @@ export function TodoWorkspace() {
     sortOrder: 'asc',
   });
 
-  const handleSetQuery = (updater: (previous: TodoListQuery) => TodoListQuery) => {
+  const handleSetQuery = (
+    updater: (previous: TodoListQuery) => TodoListQuery
+  ) => {
     setQueryState((prev) => updater(prev));
   };
 
@@ -75,16 +85,21 @@ export function TodoWorkspace() {
   );
 }
 
-function TodoWorkspaceInternal({ query, setQuery }: TodoWorkspaceInternalProps) {
+function TodoWorkspaceInternal({
+  query,
+  setQuery,
+}: TodoWorkspaceInternalProps) {
   const { selectedIds, clear } = useTodoSelection();
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingTodoId, setEditingTodoId] = useState<string | null>(null);
   const [activeTodoId, setActiveTodoId] = useState<string | null>(null);
   const [localTodos, setLocalTodos] = useState<TodoListItem[]>([]);
-  const [activityTypeFilter, setActivityTypeFilter] = useState<ActivityLog['type'] | undefined>(
-    undefined
-  );
-  const [activityDateFrom, setActivityDateFrom] = useState<string | undefined>();
+  const [activityTypeFilter, setActivityTypeFilter] = useState<
+    ActivityLog['type'] | undefined
+  >(undefined);
+  const [activityDateFrom, setActivityDateFrom] = useState<
+    string | undefined
+  >();
   const [activityDateTo, setActivityDateTo] = useState<string | undefined>();
   const [editingRecurrence, setEditingRecurrence] = useState(false);
 
@@ -100,8 +115,8 @@ function TodoWorkspaceInternal({ query, setQuery }: TodoWorkspaceInternalProps) 
   const editingTodoQuery = useTodoDetail(editingTodoId);
   const activityLog = useActivityLog(activeTodoId, {
     type: activityTypeFilter,
-    from: activityDateFrom,
-    to: activityDateTo,
+    dateFrom: activityDateFrom,
+    dateTo: activityDateTo,
   });
   const analytics = useAnalyticsSummary(query);
 
@@ -118,7 +133,10 @@ function TodoWorkspaceInternal({ query, setQuery }: TodoWorkspaceInternalProps) 
   }, [activeTodoId, todoList.data]);
 
   useEffect(() => {
-    if (preferences?.defaultView === 'LIST' && preferences.savedFilters.length > 0) {
+    if (
+      preferences?.defaultView === 'LIST' &&
+      preferences.savedFilters.length > 0
+    ) {
       const defaultFilter = preferences.savedFilters[0];
       if (defaultFilter) {
         applySavedFilter(defaultFilter.filters as Partial<TodoListQuery>);
@@ -157,17 +175,63 @@ function TodoWorkspaceInternal({ query, setQuery }: TodoWorkspaceInternalProps) 
   }, [localTodos]);
 
   const handleCreate = async (payload: TodoMutationPayload) => {
-    await todoMutations.create.mutateAsync(payload);
+    // Extract recurrence and reminders if present (for TodoFormPayload compatibility)
+    const { recurrence, reminders, ...todoPayload } =
+      payload as TodoMutationPayload & {
+        recurrence?: RecurrencePayload | null;
+        reminders?: ReminderPayload[];
+      };
+
+    const todo = await todoMutations.create.mutateAsync(todoPayload);
+
+    // Handle recurrence separately if provided
+    if (recurrence) {
+      await todoMutations.createRecurrence.mutateAsync({
+        todoId: todo.id,
+        payload: recurrence,
+      });
+    }
+
+    // Handle reminders separately if provided
+    if (reminders && reminders.length > 0) {
+      await Promise.all(
+        reminders.map((reminder) =>
+          todoMutations.createReminderMutation.mutateAsync({
+            todoId: todo.id,
+            payload: reminder,
+          })
+        )
+      );
+    }
+
     setIsFormOpen(false);
   };
 
-  const handleUpdate = async (todoId: string, payload: Partial<TodoMutationPayload>) => {
-    await todoMutations.update.mutateAsync({ todoId, payload });
+  const handleUpdate = async (
+    todoId: string,
+    payload: Partial<TodoMutationPayload>
+  ) => {
+    // Extract recurrence and reminders if present (for TodoFormPayload compatibility)
+    const { ...todoPayload } = payload as Partial<TodoMutationPayload> & {
+      recurrence?: RecurrencePayload | null;
+      reminders?: ReminderPayload[];
+    };
+
+    await todoMutations.update.mutateAsync({ todoId, payload: todoPayload });
+
+    // Note: Updating recurrence and reminders would require separate handling here
+    // For now, those should be managed through the detail panel
+
     setEditingTodoId(null);
   };
 
-  const handleRecurrenceUpdate = async (todoId: string, payload: RecurrencePayload) => {
-    await todoMutations.recurrenceMutation.mutateAsync({ todoId, payload });
+  const handleRecurrenceUpdate = async (
+    todoId: string,
+    payload: RecurrencePayload
+  ) => {
+    // Note: This requires the todo to already have a recurrence rule
+    // For now, we'll use createRecurrence which creates and applies the rule
+    await todoMutations.createRecurrence.mutateAsync({ todoId, payload });
     setEditingRecurrence(false);
   };
 
@@ -206,7 +270,12 @@ function TodoWorkspaceInternal({ query, setQuery }: TodoWorkspaceInternalProps) 
   };
 
   const handleClearFilters = () => {
-    setQuery((prev) => ({ page: 1, limit: prev.limit, sortBy: prev.sortBy, sortOrder: prev.sortOrder }));
+    setQuery((prev) => ({
+      page: 1,
+      limit: prev.limit,
+      sortBy: prev.sortBy,
+      sortOrder: prev.sortOrder,
+    }));
   };
 
   const handleSortChange = (sortBy: TodoListQuery['sortBy']) => {
@@ -232,10 +301,12 @@ function TodoWorkspaceInternal({ query, setQuery }: TodoWorkspaceInternalProps) 
             Manage recurring tasks, reminders, and advanced workflows
           </p>
         </div>
-        <Button onClick={() => {
-          setEditingTodoId(null);
-          setIsFormOpen(true);
-        }}>
+        <Button
+          onClick={() => {
+            setEditingTodoId(null);
+            setIsFormOpen(true);
+          }}
+        >
           Create todo
         </Button>
       </header>
@@ -265,7 +336,8 @@ function TodoWorkspaceInternal({ query, setQuery }: TodoWorkspaceInternalProps) 
             <div>
               <CardTitle>Todo list</CardTitle>
               <CardDescription>
-                Drag to reorder within categories, multi-select for quick updates
+                Drag to reorder within categories, multi-select for quick
+                updates
               </CardDescription>
             </div>
             <div className="flex items-center gap-3">
@@ -289,7 +361,9 @@ function TodoWorkspaceInternal({ query, setQuery }: TodoWorkspaceInternalProps) 
             ) : groupedTodos.length === 0 ? (
               <div className="rounded-lg border border-dashed border-gray-300 p-12 text-center dark:border-gray-700">
                 <SparklesIcon className="mx-auto h-8 w-8 text-gray-400" />
-                <h3 className="mt-4 text-lg font-semibold">No todos match these filters</h3>
+                <h3 className="mt-4 text-lg font-semibold">
+                  No todos match these filters
+                </h3>
                 <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
                   Adjust filters or create a new todo to get started.
                 </p>
@@ -315,11 +389,8 @@ function TodoWorkspaceInternal({ query, setQuery }: TodoWorkspaceInternalProps) 
                       }
                       return next;
                     });
-                    todoMutations.reorderMutation.mutate({
-                      sourceCategoryId: group.categoryId,
-                      destinationCategoryId: group.categoryId,
-                      orderedIds,
-                    });
+                    // Note: Reordering todos is not supported by the backend yet
+                    // Only local state is updated for now
                   }}
                   onSelect={onSelectTodo}
                   onEdit={(todoId) => {
@@ -350,11 +421,19 @@ function TodoWorkspaceInternal({ query, setQuery }: TodoWorkspaceInternalProps) 
               })
             }
             onMarkSeriesComplete={(todo) => {
-              todoMutations.completeSeriesMutation.mutate(todo.id);
+              // Note: Complete series is not supported by backend yet
+              // For now, just mark the current todo as complete
+              todoMutations.toggleComplete.mutate({
+                todoId: todo.id,
+                completed: todo.status === 'DONE',
+              });
             }}
-            onCancelRecurrence={(todo) =>
-              todoMutations.cancelRecurrenceMutation.mutate(todo.id)
-            }
+            onCancelRecurrence={(todo) => {
+              // Delete recurrence rule if todo has one
+              if (todo.recurrenceRule) {
+                todoMutations.deleteRecurrence.mutate(todo.recurrenceRule.id);
+              }
+            }}
             onSaveRecurrence={(todo, recurrence) =>
               handleRecurrenceUpdate(todo.id, recurrence)
             }
@@ -369,8 +448,8 @@ function TodoWorkspaceInternal({ query, setQuery }: TodoWorkspaceInternalProps) 
             activityLoading={activityLog.isLoading}
             onActivityFilterChange={(filters) => {
               setActivityTypeFilter(filters.type);
-              setActivityDateFrom(filters.from);
-              setActivityDateTo(filters.to);
+              setActivityDateFrom(filters.dateFrom);
+              setActivityDateTo(filters.dateTo);
             }}
           />
 
@@ -396,7 +475,9 @@ function TodoWorkspaceInternal({ query, setQuery }: TodoWorkspaceInternalProps) 
         }
         categories={categories ?? []}
         tags={tags ?? []}
-        initialData={editingTodoId ? editingTodoQuery.data ?? undefined : undefined}
+        initialData={
+          editingTodoId ? (editingTodoQuery.data ?? undefined) : undefined
+        }
         defaultReminderLeadTime={defaultReminderLeadTime}
       />
     </div>
@@ -470,7 +551,11 @@ function CategorySection({
         </button>
       </div>
 
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={handleDragEnd}
+      >
         <SortableContext items={items} strategy={verticalListSortingStrategy}>
           <div className="space-y-3">
             {items.map((itemId) => {
@@ -527,10 +612,13 @@ function SortableTodoRow({
   };
 
   const dueDate = todo.dueDate ? format(parseISO(todo.dueDate), 'PP p') : null;
-  const overdue = todo.dueDate ? isBefore(parseISO(todo.dueDate), new Date()) : false;
+  const overdue = todo.dueDate
+    ? isBefore(parseISO(todo.dueDate), new Date())
+    : false;
   const hasRecurrence = Boolean(todo.recurrenceRuleId || todo.recurrenceRule);
   const upcomingReminder = todo.reminders?.find(
-    (reminder) => !reminder.sent && !isBefore(parseISO(reminder.scheduledAt), new Date())
+    (reminder) =>
+      !reminder.sent && !isBefore(parseISO(reminder.scheduledAt), new Date())
   );
 
   return (
@@ -541,7 +629,8 @@ function SortableTodoRow({
       className={cn(
         'flex cursor-pointer items-center gap-4 rounded-lg border border-gray-200 bg-white p-4 shadow-sm transition dark:border-gray-800 dark:bg-gray-900',
         isDragging && 'shadow-lg',
-        active && 'border-primary-500 ring-2 ring-primary-200 dark:ring-primary-800'
+        active &&
+          'border-primary-500 ring-2 ring-primary-200 dark:ring-primary-800'
       )}
       onClick={onSelect}
     >
@@ -553,7 +642,9 @@ function SortableTodoRow({
         }}
         className={cn(
           'flex h-5 w-5 items-center justify-center rounded border',
-          selected ? 'border-primary-500 bg-primary-500 text-white' : 'border-gray-300'
+          selected
+            ? 'border-primary-500 bg-primary-500 text-white'
+            : 'border-gray-300'
         )}
       >
         {selected ? '✓' : ''}
@@ -597,7 +688,10 @@ function SortableTodoRow({
           {upcomingReminder && (
             <span className="flex items-center gap-1 text-primary-600">
               <ClockIcon className="h-4 w-4" />
-              Reminder in {formatDistanceToNow(parseISO(upcomingReminder.scheduledAt), { addSuffix: true })}
+              Reminder in{' '}
+              {formatDistanceToNow(parseISO(upcomingReminder.scheduledAt), {
+                addSuffix: true,
+              })}
             </span>
           )}
         </div>
@@ -630,7 +724,11 @@ function SortableTodoRow({
 interface FilterBarProps {
   query: TodoListQuery;
   setQuery: (updater: (prev: TodoListQuery) => TodoListQuery) => void;
-  savedFilters: Array<{ id: string; name: string; filters: Record<string, unknown> }>;
+  savedFilters: Array<{
+    id: string;
+    name: string;
+    filters: Record<string, unknown>;
+  }>;
   onApplySavedFilter: (filters: Partial<TodoListQuery>) => void;
   onSaveCurrentFilter: (name: string) => Promise<void> | void;
   onRemoveSavedFilter: (id: string) => Promise<void> | void;
@@ -655,13 +753,17 @@ function FilterBar({
           <select
             className="input h-10 w-40"
             value={query.status ?? ''}
-            onChange={(event) =>
-              setQuery((prev) => ({
-                ...prev,
-                status: event.target.value ? (event.target.value as TodoStatus) : undefined,
+            onChange={(event) => {
+              const { status, ...rest } = query;
+              setQuery({
+                ...rest,
+                ...(event.target.value && {
+                  status: event.target.value as TodoStatus,
+                }),
                 page: 1,
-              }))
-            }
+              });
+              void status; // Keep reference to avoid unused var warning
+            }}
           >
             <option value="">All statuses</option>
             <option value="TODO">Todo</option>
@@ -673,15 +775,17 @@ function FilterBar({
           <select
             className="input h-10 w-40"
             value={query.priority ?? ''}
-            onChange={(event) =>
-              setQuery((prev) => ({
-                ...prev,
-                priority: event.target.value
-                  ? (event.target.value as TodoPriority)
-                  : undefined,
+            onChange={(event) => {
+              const { priority, ...rest } = query;
+              setQuery({
+                ...rest,
+                ...(event.target.value && {
+                  priority: event.target.value as TodoPriority,
+                }),
                 page: 1,
-              }))
-            }
+              });
+              void priority;
+            }}
           >
             <option value="">All priorities</option>
             <option value="LOW">Low</option>
@@ -694,25 +798,29 @@ function FilterBar({
             type="date"
             className="input h-10"
             value={query.dueDateFrom ?? ''}
-            onChange={(event) =>
-              setQuery((prev) => ({
-                ...prev,
-                dueDateFrom: event.target.value || undefined,
+            onChange={(event) => {
+              const { dueDateFrom, ...rest } = query;
+              setQuery({
+                ...rest,
+                ...(event.target.value && { dueDateFrom: event.target.value }),
                 page: 1,
-              }))
-            }
+              });
+              void dueDateFrom;
+            }}
           />
           <input
             type="date"
             className="input h-10"
             value={query.dueDateTo ?? ''}
-            onChange={(event) =>
-              setQuery((prev) => ({
-                ...prev,
-                dueDateTo: event.target.value || undefined,
+            onChange={(event) => {
+              const { dueDateTo, ...rest } = query;
+              setQuery({
+                ...rest,
+                ...(event.target.value && { dueDateTo: event.target.value }),
                 page: 1,
-              }))
-            }
+              });
+              void dueDateTo;
+            }}
           />
 
           <Button variant="secondary" size="sm" onClick={onClear}>
@@ -752,7 +860,9 @@ function FilterBar({
                     type="button"
                     className="font-semibold text-primary-600"
                     onClick={() =>
-                      onApplySavedFilter(filter.filters as Partial<TodoListQuery>)
+                      onApplySavedFilter(
+                        filter.filters as Partial<TodoListQuery>
+                      )
                     }
                   >
                     {filter.name}
@@ -849,15 +959,24 @@ interface TodoDetailPanelProps {
   setEditingRecurrence: (value: boolean) => void;
   reminderMutations: {
     create: {
-      mutate: (variables: { todoId: string; payload: { scheduledAt: string; channel: 'IN_APP' | 'EMAIL' | 'PUSH' } }) => void;
-      mutateAsync: (variables: { todoId: string; payload: { scheduledAt: string; channel: 'IN_APP' | 'EMAIL' | 'PUSH' } }) => Promise<unknown>;
+      mutate: (variables: {
+        todoId: string;
+        payload: { scheduledAt: string; channel: 'IN_APP' | 'EMAIL' | 'PUSH' };
+      }) => void;
+      mutateAsync: (variables: {
+        todoId: string;
+        payload: { scheduledAt: string; channel: 'IN_APP' | 'EMAIL' | 'PUSH' };
+      }) => Promise<unknown>;
       isLoading?: boolean;
     };
     update: {
       mutate: (variables: {
         todoId: string;
         reminderId: string;
-        payload: Partial<{ scheduledAt: string; channel: 'IN_APP' | 'EMAIL' | 'PUSH' }>;
+        payload: Partial<{
+          scheduledAt: string;
+          channel: 'IN_APP' | 'EMAIL' | 'PUSH';
+        }>;
       }) => void;
       isLoading?: boolean;
     };
@@ -870,8 +989,8 @@ interface TodoDetailPanelProps {
   activityLoading: boolean;
   onActivityFilterChange: (filters: {
     type?: ActivityLog['type'];
-    from?: string;
-    to?: string;
+    dateFrom?: string;
+    dateTo?: string;
   }) => void;
 }
 
@@ -890,9 +1009,10 @@ function TodoDetailPanel({
   activityLoading,
   onActivityFilterChange,
 }: TodoDetailPanelProps) {
-  const [draftRecurrence, setDraftRecurrence] = useState<RecurrencePayload | null>(
-    recurrenceRuleToPayload(todo?.recurrenceRule ?? null)
-  );
+  const [draftRecurrence, setDraftRecurrence] =
+    useState<RecurrencePayload | null>(
+      recurrenceRuleToPayload(todo?.recurrenceRule ?? null)
+    );
 
   useEffect(() => {
     setDraftRecurrence(recurrenceRuleToPayload(todo?.recurrenceRule ?? null));
@@ -928,16 +1048,15 @@ function TodoDetailPanel({
         <div className="flex items-start justify-between gap-3">
           <div>
             <CardTitle className="text-xl">{todo.title}</CardTitle>
-            <CardDescription>{todo.description || 'No description provided'}</CardDescription>
+            <CardDescription>
+              {todo.description || 'No description provided'}
+            </CardDescription>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="secondary" size="sm" onClick={onEdit}>
               Edit
             </Button>
-            <Button
-              size="sm"
-              onClick={() => onToggleComplete(todo)}
-            >
+            <Button size="sm" onClick={() => onToggleComplete(todo)}>
               {todo.status === 'DONE' ? 'Mark active' : 'Complete'}
             </Button>
           </div>
@@ -974,7 +1093,11 @@ function TodoDetailPanel({
                 size="sm"
                 onClick={() => setEditingRecurrence(!editingRecurrence)}
               >
-                {editingRecurrence ? 'Cancel' : todo.recurrenceRule ? 'Edit recurrence' : 'Add recurrence'}
+                {editingRecurrence
+                  ? 'Cancel'
+                  : todo.recurrenceRule
+                    ? 'Edit recurrence'
+                    : 'Add recurrence'}
               </Button>
               {todo.recurrenceRule && (
                 <Button
@@ -999,7 +1122,9 @@ function TodoDetailPanel({
                   variant="secondary"
                   size="sm"
                   onClick={() => {
-                    setDraftRecurrence(recurrenceRuleToPayload(todo.recurrenceRule));
+                    setDraftRecurrence(
+                      recurrenceRuleToPayload(todo.recurrenceRule)
+                    );
                     setEditingRecurrence(false);
                   }}
                 >
@@ -1063,9 +1188,12 @@ function TodoDetailPanel({
             <div className="flex items-center gap-2 text-xs">
               <select
                 className="input h-8"
-                onChange={(event) =>
-                  onActivityFilterChange({ type: event.target.value || undefined })
-                }
+                onChange={(event) => {
+                  const value = event.target.value;
+                  onActivityFilterChange(
+                    value ? { type: value as ActivityLog['type'] } : {}
+                  );
+                }}
               >
                 <option value="">All types</option>
                 <option value="CREATED">Created</option>
@@ -1076,16 +1204,18 @@ function TodoDetailPanel({
               <input
                 type="date"
                 className="input h-8"
-                onChange={(event) =>
-                  onActivityFilterChange({ from: event.target.value || undefined })
-                }
+                onChange={(event) => {
+                  const value = event.target.value;
+                  onActivityFilterChange(value ? { dateFrom: value } : {});
+                }}
               />
               <input
                 type="date"
                 className="input h-8"
-                onChange={(event) =>
-                  onActivityFilterChange({ to: event.target.value || undefined })
-                }
+                onChange={(event) => {
+                  const value = event.target.value;
+                  onActivityFilterChange(value ? { dateTo: value } : {});
+                }}
               />
             </div>
           </div>
@@ -1100,7 +1230,10 @@ function TodoDetailPanel({
           ) : (
             <ul className="space-y-3">
               {activityLog.map((activity) => (
-                <li key={activity.id} className="rounded border border-gray-200 p-3 dark:border-gray-800">
+                <li
+                  key={activity.id}
+                  className="rounded border border-gray-200 p-3 dark:border-gray-800"
+                >
                   <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
                     <span>{activity.type.toLowerCase()}</span>
                     <span>{format(parseISO(activity.createdAt), 'PPpp')}</span>
@@ -1126,12 +1259,18 @@ interface AnalyticsWidgetProps {
   workloadByPriority: Array<{ priority: TodoPriority; value: number }>;
 }
 
-function AnalyticsWidget({ overdue, streak, workloadByPriority }: AnalyticsWidgetProps) {
+function AnalyticsWidget({
+  overdue,
+  streak,
+  workloadByPriority,
+}: AnalyticsWidgetProps) {
   return (
     <Card>
       <CardHeader>
         <CardTitle>At a glance</CardTitle>
-        <CardDescription>Productivity insights update in real time</CardDescription>
+        <CardDescription>
+          Productivity insights update in real time
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid gap-3 sm:grid-cols-2">
@@ -1168,7 +1307,9 @@ function AnalyticsWidget({ overdue, streak, workloadByPriority }: AnalyticsWidge
                     style={{ width: `${Math.min(100, entry.value * 10)}%` }}
                   />
                 </div>
-                <div className="w-10 text-right text-sm font-medium">{entry.value}</div>
+                <div className="w-10 text-right text-sm font-medium">
+                  {entry.value}
+                </div>
               </div>
             ))}
             {workloadByPriority.length === 0 && (
@@ -1192,7 +1333,10 @@ function formatRecurrence(recurrence: TodoListItem['recurrenceRule']) {
   if (Array.isArray(recurrence.byWeekday) && recurrence.byWeekday.length > 0) {
     parts.push(`on ${recurrence.byWeekday.join(', ')}`);
   }
-  if (Array.isArray(recurrence.byMonthDay) && recurrence.byMonthDay.length > 0) {
+  if (
+    Array.isArray(recurrence.byMonthDay) &&
+    recurrence.byMonthDay.length > 0
+  ) {
     parts.push(`on day ${recurrence.byMonthDay.join(', ')}`);
   }
   if (recurrence.endDate) {

@@ -62,6 +62,11 @@ export interface TodoMutationPayload {
   dueDate?: string | null;
   reminderLeadTime?: number | null;
   tagIds?: string[];
+}
+
+// Extended payload for UI forms that includes recurrence and reminders
+// These are handled separately via their own API endpoints
+export interface TodoFormPayload extends TodoMutationPayload {
   recurrence?: RecurrencePayload | null;
   reminders?: ReminderPayload[];
 }
@@ -88,9 +93,12 @@ export interface ReorderPayload {
 }
 
 export interface ActivityLogQuery {
+  todoId?: string;
   type?: ActivityLog['type'];
-  from?: string;
-  to?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  page?: number;
+  limit?: number;
 }
 
 export interface SavedFilterPayload {
@@ -126,18 +134,7 @@ export const fetchTodo = async (todoId: string): Promise<Todo> => {
 export const createTodo = async (
   payload: TodoMutationPayload
 ): Promise<Todo> => {
-  const { recurrence, reminders, ...basePayload } = payload;
-  const response = await apiClient.post<{ data: Todo }>(
-    '/todos',
-    {
-      ...basePayload,
-      ...(recurrence ? { recurrence } : {}),
-      ...(reminders && reminders.length > 0
-        ? { reminders }
-        : {}),
-    }
-  );
-
+  const response = await apiClient.post<{ data: Todo }>('/todos', payload);
   return response.data.data;
 };
 
@@ -145,17 +142,10 @@ export const updateTodo = async (
   todoId: string,
   payload: Partial<TodoMutationPayload>
 ): Promise<Todo> => {
-  const { recurrence, reminders, ...basePayload } = payload;
   const response = await apiClient.patch<{ data: Todo }>(
     `/todos/${todoId}`,
-    {
-      ...basePayload,
-      ...(recurrence ? { recurrence } : {}),
-      ...(recurrence === null ? { recurrence: null } : {}),
-      ...(reminders ? { reminders } : {}),
-    }
+    payload
   );
-
   return response.data.data;
 };
 
@@ -173,25 +163,46 @@ export const markTodoIncomplete = async (todoId: string): Promise<Todo> => {
   return response.data.data;
 };
 
-export const updateRecurrence = async (
-  todoId: string,
+export const createRecurrenceRule = async (
   payload: RecurrencePayload
 ): Promise<RecurrenceRule> => {
-  const response = await apiClient.put<{ data: RecurrenceRule }>(
-    `/todos/${todoId}/recurrence`,
+  const response = await apiClient.post<{ data: RecurrenceRule }>(
+    '/recurrence',
     payload
   );
   return response.data.data;
 };
 
-export const cancelRecurrence = async (todoId: string): Promise<void> => {
-  await apiClient.delete(`/todos/${todoId}/recurrence`);
+export const updateRecurrenceRule = async (
+  ruleId: string,
+  payload: Partial<RecurrencePayload>
+): Promise<RecurrenceRule> => {
+  const response = await apiClient.patch<{ data: RecurrenceRule }>(
+    `/recurrence/${ruleId}`,
+    payload
+  );
+  return response.data.data;
 };
 
-export const completeRecurrenceSeries = async (
-  todoId: string
-): Promise<void> => {
-  await apiClient.post(`/todos/${todoId}/recurrence/complete-series`);
+export const deleteRecurrenceRule = async (ruleId: string): Promise<void> => {
+  await apiClient.delete(`/recurrence/${ruleId}`);
+};
+
+export const applyRecurrenceToTodo = async (todoId: string): Promise<void> => {
+  await apiClient.post(`/recurrence/apply/${todoId}`);
+};
+
+export const getRecurrenceOccurrences = async (
+  ruleId: string,
+  count?: number
+): Promise<{ data: string[] }> => {
+  const response = await apiClient.get<{ data: string[] }>(
+    `/recurrence/${ruleId}/occurrences`,
+    {
+      params: count ? { count } : {},
+    }
+  );
+  return response.data;
 };
 
 export const createReminder = async (
@@ -215,22 +226,25 @@ export const updateReminderRequest = async (
   return response.data.data;
 };
 
-export const deleteReminder = async (
-  reminderId: string
-): Promise<void> => {
+export const deleteReminder = async (reminderId: string): Promise<void> => {
   await apiClient.delete(`/reminders/${reminderId}`);
 };
 
 export const fetchActivityLog = async (
   query: ActivityLogQuery = {}
-): Promise<PaginatedResponse<ActivityLog[]>> => {
-  const response = await apiClient.get<PaginatedResponse<ActivityLog[]>>(
-    '/activity-logs',
-    {
-      params: query,
-    }
-  );
-  return response.data;
+): Promise<ActivityLog[]> => {
+  const response = await apiClient.get<{
+    data: ActivityLog[];
+    meta: {
+      total: number;
+      page: number;
+      limit: number;
+      pages: number;
+    };
+  }>('/activity-logs', {
+    params: query,
+  });
+  return response.data.data;
 };
 
 export const fetchSavedFilters = async (): Promise<SavedFilter[]> => {
@@ -285,14 +299,14 @@ export const fetchAnalyticsSummary = async (
 
 export const searchTodos = async (
   term: string,
-  filters?: any
+  filters?: Record<string, unknown>
 ): Promise<PaginatedResponse<SearchResult[]>> => {
   const response = await apiClient.get<PaginatedResponse<SearchResult[]>>(
     '/search/todos',
     {
-      params: { 
+      params: {
         q: term,
-        ...(filters && { filters })
+        ...(filters && { filters }),
       },
     }
   );
@@ -301,15 +315,28 @@ export const searchTodos = async (
 
 export const bulkUpdateTodos = async (
   payload: BulkUpdatePayload
-): Promise<void> => {
-  await apiClient.post('/todos/bulk-update', payload);
+): Promise<{ updated: number; failed: string[] }> => {
+  const response = await apiClient.put<{
+    data: { updated: number; failed: string[] };
+    meta: Record<string, unknown>;
+  }>('/bulk/update', payload);
+  return response.data.data;
 };
 
-export const reorderTodos = async (
-  payload: ReorderPayload
-): Promise<void> => {
-  await apiClient.post('/todos/reorder', payload);
+export const bulkDeleteTodos = async (
+  todoIds: string[]
+): Promise<{ deleted: number; failed: string[] }> => {
+  const response = await apiClient.delete<{
+    data: { deleted: number; failed: string[] };
+    meta: Record<string, unknown>;
+  }>('/bulk', {
+    data: { todoIds },
+  });
+  return response.data.data;
 };
+
+// Note: Reordering is not supported at the todo level on the backend
+// Only categories and subtasks support reordering
 
 export const fetchCategories = async (): Promise<Category[]> => {
   const response = await apiClient.get<{ data: Category[] }>('/categories');
@@ -321,14 +348,18 @@ export const fetchTags = async (): Promise<Tag[]> => {
   return response.data.data;
 };
 
-export const getRemindersByTodo = async (todoId: string): Promise<Reminder[]> => {
+export const getRemindersByTodo = async (
+  todoId: string
+): Promise<Reminder[]> => {
   const response = await apiClient.get<{ data: Reminder[] }>(
     `/reminders/todo/${todoId}`
   );
   return response.data.data;
 };
 
-export const getUpcomingReminders = async (hours?: number): Promise<Reminder[]> => {
+export const getUpcomingReminders = async (
+  hours?: number
+): Promise<Reminder[]> => {
   const response = await apiClient.get<{ data: Reminder[] }>(
     '/reminders/upcoming',
     {
